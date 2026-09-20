@@ -83,7 +83,10 @@ class AutomationWorker:
                     if c.fsm.state == GameState.ERROR:
                         reason = "error"
                     break
-                self._stop.wait(c.profile.detect_interval)
+                interval = (c.suggested_interval()
+                            if hasattr(c, "suggested_interval")
+                            else c.profile.detect_interval)
+                self._stop.wait(interval)
             if self._pause.is_set():
                 c.on_event("log", {"message": "⏹ 已在暂停状态下停止"})
         finally:

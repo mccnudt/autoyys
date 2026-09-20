@@ -748,3 +748,19 @@ class TestProgressEvents:
         assert progress
         assert progress[-1]["runs"] == 3
         assert progress[-1]["max_runs"] == 3
+
+
+class TestAdaptiveInterval:
+    def test_adaptive_interval_adjusts_for_states(self, profile):
+        profile.detect_interval = 0.5
+        profile.pre_battle_delay = 5.0
+        c, _ = make_controller(profile, FakeDetector([["challenge"]]))
+        # 初始 FIND_CHALLENGE 状态
+        assert c.suggested_interval() == 0.5
+
+        # 触发进入战斗: FIND_CHALLENGE -> CLICK_CHALLENGE -> WAIT_BATTLE
+        c.run_once()
+        c.run_once()
+        assert c.fsm.state == GameState.WAIT_BATTLE
+        # 战斗前置等待期自适应降频
+        assert c.suggested_interval() == 1.2

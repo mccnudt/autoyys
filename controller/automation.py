@@ -121,6 +121,34 @@ class AutomationController:
         return self._finished or self.fsm.state in (
             GameState.STOPPED, GameState.ERROR)
 
+    def suggested_interval(self) -> float:
+        """根据当前状态与运行阶段提供自适应检测心跳(节约多开 CPU/GPU 占用)。"""
+        base = self.profile.detect_interval if self.profile else 0.5
+        if not self.profile:
+            return base
+        st = self.fsm.state
+        now = self._clock()
+        # 1. 拟人化休息期间: 直接休眠至休息结束或最长 1.0 秒
+        if now < self._rest_until:
+            return min(1.0, max(base, self._rest_until - now))
+        # 2. 战斗等待期: 动画前置等待(pre_battle_delay)或刚进战斗阶段自适应降频
+        if st == GameState.WAIT_BATTLE:
+            elapsed = now - self._battle_started_at
+            if elapsed < self.profile.pre_battle_delay:
+                return max(base, 1.2)
+            elif elapsed < 10.0 and self.profile.battle_timeout > 15.0:
+                return max(base, 1.0)
+        # 3. 找入口/找二段界面展开等待期: 适度降频
+        elif st in (GameState.FIND_ENTRY, GameState.FIND_ENTRY2):
+            delay = (self.profile.entry_delay if st == GameState.FIND_ENTRY
+                     else self.profile.entry2_delay)
+            if now - self._state_entered_at < delay:
+                return max(base, 0.8)
+        elif st == GameState.FIND_SECOND:
+            if now - self._state_entered_at < self.profile.second_delay:
+                return max(base, 0.8)
+        return base
+
     # ---- 事件 ----
 
     def _log(self, msg: str) -> None:
