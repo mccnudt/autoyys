@@ -86,6 +86,36 @@ class TestProfileManager:
         errs, _ = loaded.validate(image_exists=lambda p: p == "battle.png")
         assert any("「排除图片过滤」图片不存在" in e for e in errs)
 
+    def test_team_role_profile_validation(self, tmp_path):
+        pm = ProfileManager(str(tmp_path))
+        # 队员模式允许不配开始图
+        member_p = BattleProfile(
+            name="队员配置",
+            team_role="队员",
+            battle_img="",
+            victory_img="vic.png",
+            invite_enabled=True,
+            invite_img="inv.png",
+            ready_enabled=False,
+            team_timeout=180.0
+        )
+        pm.save(member_p)
+        loaded = pm.load("队员配置")
+        assert loaded.team_role == "队员"
+        assert loaded.invite_enabled is True
+        assert loaded.team_timeout == 180.0
+        errs, _ = loaded.validate(image_exists=lambda p: p in ("vic.png", "inv.png"))
+        assert not errs  # 队员模式下无战斗开始图不会报错
+
+        # 单人/队长模式不配开始图则报错
+        solo_p = BattleProfile(name="单人配置", team_role="单人", battle_img="")
+        errs_solo, _ = solo_p.validate(image_exists=lambda p: True)
+        assert any("请先设置战斗开始图" in e for e in errs_solo)
+
+        leader_p = BattleProfile(name="队长配置", team_role="队长", battle_img="")
+        errs_leader, _ = leader_p.validate(image_exists=lambda p: True)
+        assert any("请先设置战斗开始图" in e for e in errs_leader)
+
 
 
 class TestWorker:

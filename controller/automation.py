@@ -81,19 +81,25 @@ class AutomationController:
     # ---- 生命周期 ----
 
     def start(self, profile: BattleProfile) -> None:
-        if not profile.battle_img:
+        if profile.team_role in ("单人", "队长") and not profile.battle_img:
             raise AutoBotError("未设置战斗开始图，无法运行")
         self.profile = profile
         self.stats.reset()
         self.fsm.reset()
         self._reset_context()
         self._dungeon_round = 0  # 副本轮数(入口-结束循环计数)
-        if profile.entry_enabled and profile.entry_img:
+        if profile.team_role == "队员":
+            self._goto(GameState.WAIT_TEAM)
+            self._log(f"▶ 开始挂机[队员模式] - {profile.name}，目标 {profile.max_runs} 次"
+                      f"（{'后台' if self.input.is_background else '前台'}模式，等待发车）")
+        elif profile.entry_enabled and profile.entry_img:
             self._goto(GameState.FIND_ENTRY)
+            self._log(f"▶ 开始挂机 - {profile.name}，目标 {profile.max_runs} 次"
+                      f"（{'后台' if self.input.is_background else '前台'}模式）")
         else:
             self._goto(GameState.FIND_CHALLENGE)
-        self._log(f"▶ 开始挂机 - {profile.name}，目标 {profile.max_runs} 次"
-                  f"（{'后台' if self.input.is_background else '前台'}模式）")
+            self._log(f"▶ 开始挂机 - {profile.name}，目标 {profile.max_runs} 次"
+                      f"（{'后台' if self.input.is_background else '前台'}模式）")
 
     def _reset_context(self) -> None:
         self._click_target = None
@@ -164,7 +170,8 @@ class AutomationController:
         self.fsm.transition_to(target)
         self._state_entered_at = self._clock()
         if target in (GameState.FIND_CHALLENGE, GameState.FIND_SECOND,
-                      GameState.FIND_ENTRY, GameState.FIND_ENTRY2):
+                      GameState.FIND_ENTRY, GameState.FIND_ENTRY2,
+                      GameState.WAIT_TEAM):
             self._find_reactivated = False
             self._last_scroll_at = self._state_entered_at
         self._minimized_logged = False
@@ -251,6 +258,8 @@ class AutomationController:
             self._tick_settlement(img)
         elif state == GameState.CLICK_END:
             self._tick_click_end()
+        elif state == GameState.WAIT_TEAM:
+            self._tick_wait_team(img)
 
     # ---- 各状态处理 ----
 
@@ -370,6 +379,119 @@ class AutomationController:
 
         # 找图超时：先点击激活坐标重新激活一次，仍找不到则停止
         self._find_timeout_common(img, now, "战斗开始图")
+
+    def _tick_wait_team(self, img) -> None:
+        """队员等待组队发车/战斗：非阻塞被动响应 + 容错兜底。
+
+        - 游戏内若勾选「默认自动接受邀请」，队员会自动秒准备，无需强制任何按钮；
+        - 若出现异常弹窗（如体力不足），安全响应；
+        - 若配置了邀请图/准备图且界面恰好出现，顺手点击作为兜底；
+        - 一旦检测到式神战斗或胜负/结算图，平滑无缝接入 WAIT_BATTLE 或 SETTLEMENT；
+        - 看门狗超时(team_timeout)仅作为长期掉线告警，不干扰正常轮转。
+        """
+        now = self._clock()
+        # 拟人化休息窗口
+        if now < self._rest_until:
+            if not self._rest_announced:
+                self._log(f"😪 休息 {self._rest_until - now:.0f} 秒...")
+                self._rest_announced = True
+            self._state_entered_at = now
+            return
+        self._rest_announced = False
+
+        # 达到目标次数 -> 完成
+        runs = self.stats.snapshot().total_runs
+        if runs >= self.profile.max_runs:
+            self._log(f"✅ 挂机完成！共 {runs} 次")
+            self._finished = True
+            self._goto(GameState.STOPPED)
+            return
+
+        types = [ScreenType.VICTORY, ScreenType.FAILURE]
+        if self.profile.confirm_img:
+            types.append(ScreenType.SETTLEMENT)
+        if self.profile.shikigami_enabled and self.profile.shikigami_img:
+            types.append(ScreenType.SHIKIGAMI)
+        if self.profile.alert_enabled and self.profile.alert_img:
+            types.append(ScreenType.ALERT)
+        if self.profile.invite_enabled and self.profile.invite_img:
+            types.append(ScreenType.INVITE)
+        if self.profile.ready_enabled and self.profile.ready_img:
+            types.append(ScreenType.READY)
+
+        res = self.detector.detect(img, self.profile, types)
+        if self._handle_alert_if_present(img, res):
+            return
+
+        # 1. 战斗已结束/结算中（直达结算）
+        m = res.first(ScreenType.VICTORY, ScreenType.FAILURE)
+        if m is not None:
+            if not self._result_seen:
+                self._result_seen = True
+                return
+            if m.screen_type == ScreenType.VICTORY:
+                self.stats.increment_run()
+                self.stats.increment_success()
+                self._log("🏆 检测到战斗胜利，进入结算")
+            else:
+                self.stats.increment_run()
+                self.stats.increment_failure()
+                self._log("☠ 检测到战斗失败，进入结算")
+            self._result_pos = m.center
+            self._settlement_at = now
+            self._result_clicked = False
+            self._confirm_clicked = False
+            self._result_seen = False
+            self._shikigami_clicked = False
+            self._goto(GameState.SETTLEMENT)
+            return
+        self._result_seen = False
+
+        if res.settlement and res.settlement.matched:
+            self._log("🏁 检测到结算画面，进入结算")
+            self._settlement_at = now
+            self._result_clicked = False
+            self._confirm_clicked = False
+            self._result_seen = False
+            self._shikigami_clicked = False
+            self._goto(GameState.SETTLEMENT)
+            return
+
+        # 2. 战斗已开始（检测到式神绿标）
+        if res.shikigami and res.shikigami.matched:
+            self._log("⚔ 检测到式神，已进入战斗！")
+            self._battle_started_at = now
+            if not self._shikigami_clicked:
+                self.input.click(res.shikigami.center[0], res.shikigami.center[1], clicks=1)
+                self._shikigami_clicked = True
+            self._goto(GameState.WAIT_BATTLE)
+            return
+
+        # 3. 容错备用：检测到邀请弹窗
+        if res.invite and res.invite.matched:
+            pos = res.invite.center
+            self.input.click(pos[0], pos[1], clicks=1)
+            self._log(f"🤝 队员检测到组队邀请，已点击接受 ({pos[0]}, {pos[1]})")
+            self._state_entered_at = now
+            return
+
+        # 4. 容错备用：检测到准备按钮
+        if res.ready and res.ready.matched:
+            pos = res.ready.center
+            self.input.click(pos[0], pos[1], clicks=1)
+            self._log(f"👊 队员检测到准备按钮，已点击准备 ({pos[0]}, {pos[1]})")
+            self._state_entered_at = now
+            return
+
+        # 5. 看门狗超时：等待发车超长时间无任何动静（如队长掉线/散队）
+        tt = self.profile.team_timeout
+        if tt > 0 and now - self._state_entered_at > tt:
+            self._log(f"⚠ 等待发车超时 (已等待超 {tt:.0f} 秒无任何响应)")
+            if self.profile.error_action == "stop":
+                self.debug.save_error(img, AutoBotError("等待发车超时停止"))
+                self._goto(GameState.ERROR)
+            else:
+                self._state_entered_at = now  # 重置看门狗，继续等待下一拍
 
     def _handle_alert_if_present(self, img, res) -> bool:
         """若检测到通用异常弹窗(如体力耗尽/网络断线/协同邀请),按配置处理并返回 True。"""
@@ -650,9 +772,12 @@ class AutomationController:
                 self._goto(GameState.TIMEOUT_HANDLED)
 
     def _tick_timeout_handled(self) -> None:
-        # 超时点击后给游戏一段载入缓冲再回到找挑战
+        # 超时点击后给游戏一段载入缓冲再回到找挑战/等待发车
         if self._clock() - self._timeout_at > self.TIMEOUT_BUFFER:
-            self._goto(GameState.FIND_CHALLENGE)
+            if self.profile and self.profile.team_role == "队员":
+                self._goto(GameState.WAIT_TEAM)
+            else:
+                self._goto(GameState.FIND_CHALLENGE)
 
     def _tick_settlement(self, img) -> None:
         now = self._clock()
@@ -683,13 +808,16 @@ class AutomationController:
         if now - self._settlement_at < random.uniform(*self.RESULT_CLICK_BUFFER):
             return
         self._maybe_rest()
-        self._goto(GameState.FIND_CHALLENGE)
+        if self.profile and self.profile.team_role == "队员":
+            self._goto(GameState.WAIT_TEAM)
+        else:
+            self._goto(GameState.FIND_CHALLENGE)
 
     def _maybe_rest(self) -> None:
         p = self.profile
         runs = self.stats.snapshot().total_runs
         n = _random_from_range(p.rest_every)
-        if n and runs % n == 0 and runs < p.max_runs:
+        if n and runs > 0 and runs % n == 0 and runs < p.max_runs:
             rt = _random_from_range(p.rest_seconds, default=5)
             self._rest_until = self._clock() + rt
             self._rest_announced = False

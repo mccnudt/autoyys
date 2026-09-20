@@ -28,6 +28,7 @@ STATE_TEXT = {
     "find_entry": "寻找入口", "click_entry": "点击入口",
     "find_entry2": "寻找入口2", "click_entry2": "点击入口2",
     "click_end": "副本收尾",
+    "wait_team": "等待发车",
 }
 
 
@@ -120,10 +121,19 @@ class BotTab(ttk.Frame):
         ("exclude_img", "exclude_img", "img"),
         ("exclude_threshold", "exclude_conf", "float"),
         ("exclude_distance", "exclude_dist", "float"),
+        ("team_role", "team_role", "str"),
+        ("invite_enabled", "invite_enabled", "bool"),
+        ("invite_img", "invite_img", "img"),
+        ("invite_threshold", "invite_conf", "float"),
+        ("ready_enabled", "ready_enabled", "bool"),
+        ("ready_img", "ready_img", "img"),
+        ("ready_threshold", "ready_conf", "float"),
+        ("team_timeout", "team_timeout", "float"),
     ]
     # var 默认值覆盖:profile 默认 None/空时,UI 仍给合理初始值
     _VAR_DEFAULT_OVERRIDES = {
         "window_keyword": "阳师",
+        "team_role": "单人",
         "timeout": (800, 450),  # 超时点击坐标的 UI 默认
     }
 
@@ -314,6 +324,17 @@ class BotTab(ttk.Frame):
         lfc = self._make_collapsible(lf, default_open=True)
 
         self._previews = {}
+        # 运行模式选择行
+        role_row = ttk.Frame(lfc)
+        role_row.pack(fill=tk.X, pady=(0, 6))
+        ttk.Label(role_row, text="运行模式:", font=("", 9, "bold")).pack(side=tk.LEFT)
+        role_combo = ttk.Combobox(role_row, textvariable=self._vars["team_role"],
+                                  width=8, state="readonly", font=("", 9))
+        role_combo["values"] = ["单人", "队长", "队员"]
+        role_combo.pack(side=tk.LEFT, padx=(4, 12))
+        ttk.Label(role_row, text="💡 队员模式下等待发车+自动结算，支持游戏内自动接受与秒准备",
+                  foreground="#0066cc", font=("", 8)).pack(side=tk.LEFT)
+
         self._previews["battle"] = widgets.make_image_row(
             lf, "战斗开始图:", self._vars["battle_img"], self._vars["battle_conf"],
             lambda: self._crop_to("battle"), )
@@ -330,6 +351,12 @@ class BotTab(ttk.Frame):
             lf, "备选开始图(任一命中即点):", self._vars["alt_enabled"],
             self._vars["alt_battle_img"], self._vars["alt_battle_conf"],
             "alt_battle")
+        self._previews["invite"], _ = self._checkbox_image_row(
+            lf, "接受组队邀请(队员兜底):", self._vars["invite_enabled"],
+            self._vars["invite_img"], self._vars["invite_conf"], "invite")
+        self._previews["ready"], _ = self._checkbox_image_row(
+            lf, "组队准备按钮(队员兜底):", self._vars["ready_enabled"],
+            self._vars["ready_img"], self._vars["ready_conf"], "ready")
         self._previews["second"], _ = self._checkbox_image_row(
             lf, "第二段图(如进攻,点完开始图后点它):", self._vars["second_enabled"],
             self._vars["second_img"], self._vars["second_conf"], "second")

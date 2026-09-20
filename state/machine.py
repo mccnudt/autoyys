@@ -25,7 +25,8 @@ class GameState(Enum):
     WAIT_BATTLE = "wait_battle"
     SETTLEMENT = "settlement"
     CLICK_END = "click_end"        # 副本结束图点击,点完回入口段
-    TIMEOUT_HANDLED = "timeout_handled"  # 超时坐标已点击，缓冲后回 FIND_CHALLENGE
+    WAIT_TEAM = "wait_team"        # 队员等待组队发车/战斗(非阻塞被动响应)
+    TIMEOUT_HANDLED = "timeout_handled"  # 超时坐标已点击，缓冲后回 FIND_CHALLENGE/WAIT_TEAM
     ERROR = "error"
     STOPPED = "stopped"
 
@@ -33,7 +34,7 @@ class GameState(Enum):
 # 合法转换表：state -> 允许的目标集合
 TRANSITIONS: Dict[GameState, FrozenSet[GameState]] = {
     GameState.IDLE: frozenset({
-        GameState.FIND_ENTRY, GameState.FIND_CHALLENGE,
+        GameState.FIND_ENTRY, GameState.FIND_CHALLENGE, GameState.WAIT_TEAM,
         GameState.ERROR, GameState.STOPPED}),
     GameState.FIND_ENTRY: frozenset({
         GameState.CLICK_ENTRY, GameState.ERROR, GameState.STOPPED}),
@@ -54,13 +55,18 @@ TRANSITIONS: Dict[GameState, FrozenSet[GameState]] = {
         GameState.CLICK_SECOND, GameState.ERROR, GameState.STOPPED}),
     GameState.CLICK_SECOND: frozenset({
         GameState.WAIT_BATTLE, GameState.ERROR, GameState.STOPPED}),
+    GameState.WAIT_TEAM: frozenset({
+        GameState.WAIT_BATTLE, GameState.SETTLEMENT,
+        GameState.ERROR, GameState.STOPPED}),
     GameState.WAIT_BATTLE: frozenset({
         GameState.SETTLEMENT, GameState.TIMEOUT_HANDLED,
         GameState.ERROR, GameState.STOPPED}),
     GameState.TIMEOUT_HANDLED: frozenset({
-        GameState.FIND_CHALLENGE, GameState.ERROR, GameState.STOPPED}),
+        GameState.FIND_CHALLENGE, GameState.WAIT_TEAM,
+        GameState.ERROR, GameState.STOPPED}),
     GameState.SETTLEMENT: frozenset({
-        GameState.FIND_CHALLENGE, GameState.ERROR, GameState.STOPPED}),
+        GameState.FIND_CHALLENGE, GameState.WAIT_TEAM,
+        GameState.ERROR, GameState.STOPPED}),
     GameState.CLICK_END: frozenset({
         GameState.FIND_ENTRY, GameState.FIND_CHALLENGE,
         GameState.ERROR, GameState.STOPPED}),

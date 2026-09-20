@@ -51,6 +51,10 @@ class ScreenDetector:
                 profile.alert_img, profile.alert_threshold, "alert"),
             ScreenType.EXCLUDE: (
                 profile.exclude_img, profile.exclude_threshold, "exclude"),
+            ScreenType.INVITE: (
+                profile.invite_img, profile.invite_threshold, "invite"),
+            ScreenType.READY: (
+                profile.ready_img, profile.ready_threshold, "ready"),
         }
 
         # 若开启排除图过滤且当前关注开始图，预先检索所有排除标记中心点

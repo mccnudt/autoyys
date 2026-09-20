@@ -54,3 +54,19 @@ def test_reset():
     sm.transition_to(GameState.FIND_CHALLENGE)
     sm.reset()
     assert sm.state == GameState.IDLE
+
+
+def test_wait_team_transitions():
+    sm = StateMachine()
+    # IDLE -> WAIT_TEAM -> WAIT_BATTLE -> SETTLEMENT -> WAIT_TEAM
+    sm.transition_to(GameState.WAIT_TEAM)
+    assert sm.state == GameState.WAIT_TEAM
+    sm.transition_to(GameState.WAIT_BATTLE)
+    assert sm.state == GameState.WAIT_BATTLE
+    sm.transition_to(GameState.SETTLEMENT)
+    assert sm.state == GameState.SETTLEMENT
+    sm.transition_to(GameState.WAIT_TEAM)
+    assert sm.state == GameState.WAIT_TEAM
+    sm.transition_to(GameState.STOPPED)
+    assert sm.state == GameState.STOPPED
+

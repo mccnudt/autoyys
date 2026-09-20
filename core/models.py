@@ -45,6 +45,8 @@ class ScreenType(Enum):
     SHIKIGAMI = "shikigami"        # 战斗中的式神（进入战斗后点击）
     ALERT = "alert"                # 通用异常弹窗（体力不足/重连/邀请）
     EXCLUDE = "exclude"            # 排除图片(如结界失败标记)
+    INVITE = "invite"              # 接受组队邀请
+    READY = "ready"                # 组队准备按钮
     NONE = "none"
 
 
@@ -66,6 +68,8 @@ class ScreenResult:
     shikigami: Optional[MatchResult] = None
     alert: Optional[MatchResult] = None
     exclude: Optional[MatchResult] = None
+    invite: Optional[MatchResult] = None
+    ready: Optional[MatchResult] = None
     excluded_count: int = 0
 
     def first(self, *types: ScreenType) -> Optional[MatchResult]:
@@ -144,6 +148,14 @@ class BattleProfile:
     window_keyword: str = ""       # 后台窗口标题关键词
     detect_interval: float = 0.5   # 检测间隔（秒）
     adaptive_interval: bool = True # 自适应心跳: 战斗期间自动放宽间隔降低 CPU 占用
+    team_role: str = "单人"        # 单人 | 队长 | 队员
+    invite_enabled: bool = False   # 队员备用兜底: 识别并点击接受邀请
+    invite_img: str = ""
+    invite_threshold: float = 0.8
+    ready_enabled: bool = False    # 队员备用兜底: 识别并点击准备按钮
+    ready_img: str = ""
+    ready_threshold: float = 0.8
+    team_timeout: float = 300.0    # 队员等待发车看门狗超时(秒),0=不限
 
     def to_dict(self) -> dict:
         d = dict(self.__dict__)
@@ -168,10 +180,13 @@ class BattleProfile:
 
     def validate(self, image_exists=os.path.exists) -> tuple:
         errors, warnings = [], []
-        # 必填:战斗开始图
-        if not self.battle_img:
-            errors.append("请先设置战斗开始图")
-        elif not image_exists(self.battle_img):
+        # 战斗开始图：单人与队长模式为必填；队员模式非必填（支持游戏内自动接受发车）
+        if self.team_role in ("单人", "队长"):
+            if not self.battle_img:
+                errors.append("请先设置战斗开始图")
+            elif not image_exists(self.battle_img):
+                errors.append(f"战斗开始图不存在: {self.battle_img}")
+        elif self.battle_img and not image_exists(self.battle_img):
             errors.append(f"战斗开始图不存在: {self.battle_img}")
         # 勾选项必须提供有效图片
         for label, en, img in (
@@ -182,7 +197,9 @@ class BattleProfile:
                 ("入口图2", "entry2_enabled", "entry2_img"),
                 ("副本结束图", "end_enabled", "end_img"),
                 ("异常弹窗处理", "alert_enabled", "alert_img"),
-                ("排除图片过滤", "exclude_enabled", "exclude_img")):
+                ("排除图片过滤", "exclude_enabled", "exclude_img"),
+                ("接受组队邀请", "invite_enabled", "invite_img"),
+                ("组队准备按钮", "ready_enabled", "ready_img")):
             if getattr(self, en):
                 img_path = getattr(self, img)
                 if not img_path:

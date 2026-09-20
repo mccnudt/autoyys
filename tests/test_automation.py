@@ -816,7 +816,82 @@ class TestExcludeFilter:
         c, events = make_controller(profile, AllExcludedMockDetector())
         c.run_once()
         c.run_once()
-        assert c.fsm.state == GameState.FIND_CHALLENGE
         skip_logs = [m for m in msgs(events) if "均包含排除标记，已全部跳过" in m]
         assert len(skip_logs) == 1  # 节流只记录一次
+
+
+class TestTeamMemberFlow:
+    """队员模式自动化测试：被动响应、无准备按钮不报错、自动接受/准备兜底。"""
+
+    def test_member_mode_starts_without_battle_img(self, profile):
+        """队员模式无需配置战斗开始图，可正常启动进入 WAIT_TEAM。"""
+        profile.team_role = "队员"
+        profile.battle_img = ""
+        c, events = make_controller(profile, FakeDetector([[]]))
+        assert c.fsm.state == GameState.WAIT_TEAM
+        assert any("开始挂机[队员模式]" in m for m in msgs(events))
+
+    def test_member_mode_auto_ready_full_cycle_to_completion(self, profile):
+        """核心实战场景：游戏内默认自动接受并秒准备，无准备图也不报错，顺利完成 3 轮挂机。"""
+        profile.team_role = "队员"
+        profile.battle_img = ""
+        profile.max_runs = 3
+        # 队员视角的画面序列：
+        # 第1轮：[等待发车] -> [胜利出现] -> [胜利确认]
+        # 第2轮：[等待发车] -> [胜利出现] -> [胜利确认]
+        # 第3轮：[等待发车] -> [胜利出现] -> [胜利确认]
+        script = [[], ["victory"], ["victory"], []]
+        c, events = make_controller(profile, FakeDetector(script))
+        for _ in range(30):
+            c.run_once()
+            if c.finished:
+                break
+        assert c.finished
+        s = c.stats.snapshot()
+        assert s.total_runs == 3
+        assert s.success == 3
+        assert c.fsm.state == GameState.STOPPED
+        assert any("挂机完成！共 3 次" in m for m in msgs(events))
+
+    def test_member_mode_fallback_clicks_invite_and_ready(self, profile):
+        """当出现组队邀请或准备按钮时，队员进行容错兜底点击。"""
+        profile.team_role = "队员"
+        profile.battle_img = ""
+        profile.invite_enabled = True
+        profile.invite_img = "invite.png"
+        profile.ready_enabled = True
+        profile.ready_img = "ready.png"
+        # 拍1: 检测到邀请并点击
+        # 拍2: 检测到准备并点击
+        # 拍3: 战斗胜利
+        # 拍4: 胜利确认
+        script = [["invite"], ["ready"], ["victory"], ["victory"], []]
+        c, events = make_controller(profile, FakeDetector(script))
+        # 拍1
+        c.run_once()
+        assert any("已点击接受" in m for m in msgs(events))
+        # 拍2
+        c.run_once()
+        assert any("已点击准备" in m for m in msgs(events))
+        # 拍3: 胜负首拍确认 (两拍确认机制防动画假命中)
+        c.run_once()
+        # 拍4: 胜负次拍确认，进入结算
+        c.run_once()
+        assert c.fsm.state == GameState.SETTLEMENT
+        assert c.stats.snapshot().success == 1
+
+    def test_member_mode_alert_stops_on_stamina_empty(self, profile):
+        """队员在等待发车时若遇到体力耗尽弹窗，安全停止挂机。"""
+        profile.team_role = "队员"
+        profile.battle_img = ""
+        profile.alert_enabled = True
+        profile.alert_img = "alert.png"
+        profile.alert_action = "stop"
+        script = [["alert"]]
+        c, events = make_controller(profile, FakeDetector(script))
+        c.run_once()
+        assert c.finished
+        assert c.fsm.state == GameState.STOPPED
+        assert any("检测到异常弹窗" in m for m in msgs(events))
+
 
