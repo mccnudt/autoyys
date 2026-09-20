@@ -318,237 +318,146 @@ class BotTab(ttk.Frame):
 
         # ===== 控制 =====
 
-        # ===== 战斗配置 =====
-        lf = ttk.LabelFrame(main, text="战斗配置", padding="8")
-        lf.pack(fill=tk.X, pady=(0, 8))
-        lfc = self._make_collapsible(lf, default_open=True)
+        # ===== 1.【基础】核心战斗目标 =====
+        basic_lf = ttk.LabelFrame(main, text="【基础】核心战斗目标", padding="8")
+        basic_lf.pack(fill=tk.X, pady=(0, 8))
+        basic_c = self._make_collapsible(basic_lf, default_open=True)
 
         self._previews = {}
         # 运行模式选择行
-        role_row = ttk.Frame(lfc)
+        role_row = ttk.Frame(basic_c)
         role_row.pack(fill=tk.X, pady=(0, 6))
         ttk.Label(role_row, text="运行模式:", font=("", 9, "bold")).pack(side=tk.LEFT)
         role_combo = ttk.Combobox(role_row, textvariable=self._vars["team_role"],
                                   width=8, state="readonly", font=("", 9))
         role_combo["values"] = ["单人", "队长", "队员"]
         role_combo.pack(side=tk.LEFT, padx=(4, 12))
-        ttk.Label(role_row, text="💡 队员模式下等待发车+自动结算，支持游戏内自动接受与秒准备",
+        ttk.Label(role_row, text="💡 队员模式：被动等待发车，自动结算，免填开始图；队长/单人需配置开始图",
                   foreground="#0066cc", font=("", 8)).pack(side=tk.LEFT)
 
+        # 核心4图 (每行都是标准统一的图片控件行)
         self._previews["battle"] = widgets.make_image_row(
-            lf, "战斗开始图:", self._vars["battle_img"], self._vars["battle_conf"],
-            lambda: self._crop_to("battle"), )
+            basic_c, "战斗开始图:", self._vars["battle_img"], self._vars["battle_conf"],
+            lambda: self._crop_to("battle"))
         self._previews["victory"] = widgets.make_image_row(
-            lf, "胜利图:", self._vars["victory_img"], self._vars["victory_conf"],
+            basic_c, "胜利结算图:", self._vars["victory_img"], self._vars["victory_conf"],
             lambda: self._crop_to("victory"))
         self._previews["defeat"] = widgets.make_image_row(
-            lf, "失败图:", self._vars["defeat_img"], self._vars["defeat_conf"],
+            basic_c, "失败结算图:", self._vars["defeat_img"], self._vars["defeat_conf"],
             lambda: self._crop_to("defeat"))
         self._previews["confirm"] = widgets.make_image_row(
-            lf, "结算确认图(可选):", self._vars["confirm_img"],
+            basic_c, "结算确认图(可选):", self._vars["confirm_img"],
             self._vars["confirm_conf"], lambda: self._crop_to("confirm"))
-        self._previews["alt_battle"], _ = self._checkbox_image_row(
-            lf, "备选开始图(任一命中即点):", self._vars["alt_enabled"],
-            self._vars["alt_battle_img"], self._vars["alt_battle_conf"],
-            "alt_battle")
+
+        # 运行目标与匹配策略行
+        brow = ttk.Frame(basic_c)
+        brow.pack(fill=tk.X, pady=(6, 0))
+        ttk.Label(brow, text="次数上限:", font=("", 9)).pack(side=tk.LEFT)
+        ttk.Entry(brow, textvariable=self._vars["max_runs"], width=6,
+                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 6))
+        ttk.Label(brow, text="0=不限", foreground="gray", font=("", 8)).pack(side=tk.LEFT, padx=(0, 16))
+
+        ttk.Label(brow, text="开始图点击次数:", font=("", 9)).pack(side=tk.LEFT)
+        ttk.Entry(brow, textvariable=self._vars["battle_clicks"], width=3,
+                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 16))
+
+        ttk.Label(brow, text="同图多个时点:", font=("", 9)).pack(side=tk.LEFT)
+        strat = ttk.Combobox(brow, textvariable=self._vars["match_strategy"],
+                             width=8, state="readonly", font=("", 9))
+        strat["values"] = ["最高分", "最上面", "最左边"]
+        strat.pack(side=tk.LEFT, padx=(4, 0))
+
+        # ===== 2.【进阶】组队协同与特定副本 =====
+        adv_lf = ttk.LabelFrame(main, text="【进阶】组队协同与特定副本", padding="8")
+        adv_lf.pack(fill=tk.X, pady=(0, 8))
+        adv_c = self._make_collapsible(adv_lf, default_open=False)
+
+        ttk.Label(adv_c, text="包含组队被动兜底、结界突破防误点过滤、双阶段进入图及式神绿标",
+                  foreground="gray", font=("", 8)).pack(anchor=tk.W, pady=(0, 4))
+
         self._previews["invite"], _ = self._checkbox_image_row(
-            lf, "接受组队邀请(队员兜底):", self._vars["invite_enabled"],
+            adv_c, "接受组队邀请(队员兜底):", self._vars["invite_enabled"],
             self._vars["invite_img"], self._vars["invite_conf"], "invite")
         self._previews["ready"], _ = self._checkbox_image_row(
-            lf, "组队准备按钮(队员兜底):", self._vars["ready_enabled"],
+            adv_c, "组队准备按钮(队员兜底):", self._vars["ready_enabled"],
             self._vars["ready_img"], self._vars["ready_conf"], "ready")
-        self._previews["second"], _ = self._checkbox_image_row(
-            lf, "第二段图(如进攻,点完开始图后点它):", self._vars["second_enabled"],
+
+        pv_exc, excrow = self._checkbox_image_row(
+            adv_c, "排除过滤图片(如突破失败):", self._vars["exclude_enabled"],
+            self._vars["exclude_img"], self._vars["exclude_conf"], "exclude")
+        self._previews["exclude"] = pv_exc
+        ttk.Label(excrow, text="关联间距(px):", font=("", 9)).pack(side=tk.LEFT, padx=(8, 2))
+        ttk.Entry(excrow, textvariable=self._vars["exclude_dist"], width=5,
+                  font=("", 9)).pack(side=tk.LEFT)
+
+        self._previews["alt_battle"], _ = self._checkbox_image_row(
+            adv_c, "备选开始图(任一命中即点):", self._vars["alt_enabled"],
+            self._vars["alt_battle_img"], self._vars["alt_battle_conf"], "alt_battle")
+
+        self._previews["second"], s2row = self._checkbox_image_row(
+            adv_c, "第二段图(如进攻):", self._vars["second_enabled"],
             self._vars["second_img"], self._vars["second_conf"], "second")
-        # 第二段前等待:点完第一段后等界面展开再找进攻,避免在过渡动画里误点
-        drow = ttk.Frame(lfc)
-        drow.pack(fill=tk.X, pady=(2, 0))
-        ttk.Label(drow, text="第二段前等待(秒):", font=("", 9)).pack(side=tk.LEFT)
-        ttk.Entry(drow, textvariable=self._vars["second_delay"], width=4,
-                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 6))
-        ttk.Label(drow, text="点完第一段后等界面展开的秒数,再开始找第二段图",
-                  foreground="gray", font=("", 8)).pack(side=tk.LEFT)
-
-        # 式神点击行（勾选后：进入战斗识别式神图并点击一次）
-        srow = ttk.Frame(lfc)
-        srow.pack(fill=tk.X, pady=(6, 0))
-        ttk.Checkbutton(srow, text="进入战斗后点击式神:",
-                        variable=self._vars["shikigami_enabled"]).pack(
-            side=tk.LEFT)
-        ttk.Entry(srow, textvariable=self._vars["shikigami_img"], font=("", 9)
-                  ).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(4, 5))
-
-        def _browse_shikigami():
-            from tkinter import filedialog
-            path = filedialog.askopenfilename(
-                title="选择式神图片",
-                filetypes=[("图片文件", "*.png *.jpg *.jpeg *.bmp"),
-                           ("所有文件", "*.*")])
-            if path:
-                self._vars["shikigami_img"].set(path)
-                widgets.update_img_preview(path, self._previews["shikigami"])
-
-        def _crop_shikigami():
-            path = self._crop_to("shikigami")
-            if path:
-                self._vars["shikigami_img"].set(path)
-                widgets.update_img_preview(path, self._previews["shikigami"])
-
-        ttk.Button(srow, text="浏览", command=_browse_shikigami, width=6
-                   ).pack(side=tk.LEFT)
-        ttk.Button(srow, text="截图", command=_crop_shikigami, width=6
-                   ).pack(side=tk.LEFT, padx=(5, 0))
-        ttk.Label(srow, text="置信度:", font=("", 8)).pack(
-            side=tk.LEFT, padx=(10, 2))
-        ttk.Entry(srow, textvariable=self._vars["shikigami_conf"], width=4,
+        ttk.Label(s2row, text="二段前等待(秒):", font=("", 9)).pack(side=tk.LEFT, padx=(8, 2))
+        ttk.Entry(s2row, textvariable=self._vars["second_delay"], width=4,
                   font=("", 9)).pack(side=tk.LEFT)
-        pf = tk.Frame(srow, width=80, height=50, bg="#e8e8e8",
-                      relief=tk.SUNKEN, bd=1)
-        pf.pack(side=tk.LEFT, padx=(8, 0))
-        pf.pack_propagate(False)
-        self._previews["shikigami"] = tk.Label(
-            pf, bg="#e8e8e8", fg="#888888", text="无", font=("", 8))
-        self._previews["shikigami"].pack(fill=tk.BOTH, expand=True)
 
-        # 通用异常弹窗拦截行
-        altrow = ttk.Frame(lfc)
-        altrow.pack(fill=tk.X, pady=(4, 0))
-        ttk.Checkbutton(altrow, text="异常弹窗拦截:",
-                        variable=self._vars["alert_enabled"]).pack(side=tk.LEFT)
-        ttk.Entry(altrow, textvariable=self._vars["alert_img"], width=18,
-                  state="readonly", font=("", 8)).pack(side=tk.LEFT, padx=(4, 4))
+        self._previews["shikigami"], _ = self._checkbox_image_row(
+            adv_c, "进入战斗点击式神(绿标):", self._vars["shikigami_enabled"],
+            self._vars["shikigami_img"], self._vars["shikigami_conf"], "shikigami")
 
-        def _browse_alert():
-            from tkinter import filedialog
-            path = filedialog.askopenfilename(
-                title="选择异常弹窗按钮图片(如确定/取消/X)",
-                filetypes=[("图片文件", "*.png *.jpg *.jpeg *.bmp"),
-                           ("所有文件", "*.*")])
-            if path:
-                self._vars["alert_img"].set(path)
-                widgets.update_img_preview(path, self._previews["alert"])
+        # ===== 3.【安全】异常拦截与自愈闭环 =====
+        heal_lf = ttk.LabelFrame(main, text="【安全】异常拦截与自愈闭环", padding="8")
+        heal_lf.pack(fill=tk.X, pady=(0, 8))
+        heal_c = self._make_collapsible(heal_lf, default_open=False)
 
-        def _crop_alert():
-            path = self._crop_to("alert")
-            if path:
-                self._vars["alert_img"].set(path)
-                widgets.update_img_preview(path, self._previews["alert"])
-
-        ttk.Button(altrow, text="浏览", command=_browse_alert, width=6
-                   ).pack(side=tk.LEFT)
-        ttk.Button(altrow, text="截图", command=_crop_alert, width=6
-                   ).pack(side=tk.LEFT, padx=(5, 0))
-        ttk.Label(altrow, text="置信度:", font=("", 8)).pack(
-            side=tk.LEFT, padx=(10, 2))
-        ttk.Entry(altrow, textvariable=self._vars["alert_conf"], width=4,
-                  font=("", 9)).pack(side=tk.LEFT)
-        pf_alert = tk.Frame(altrow, width=80, height=50, bg="#e8e8e8",
-                            relief=tk.SUNKEN, bd=1)
-        pf_alert.pack(side=tk.LEFT, padx=(8, 10))
-        pf_alert.pack_propagate(False)
-        self._previews["alert"] = tk.Label(
-            pf_alert, bg="#e8e8e8", fg="#888888", text="无", font=("", 8))
-        self._previews["alert"].pack(fill=tk.BOTH, expand=True)
-
-        ttk.Label(altrow, text="动作:", font=("", 9)).pack(side=tk.LEFT)
+        # 弹窗拦截
+        pv_alert, altrow = self._checkbox_image_row(
+            heal_c, "异常弹窗拦截(如体力不足):", self._vars["alert_enabled"],
+            self._vars["alert_img"], self._vars["alert_conf"], "alert")
+        self._previews["alert"] = pv_alert
+        ttk.Label(altrow, text="动作:", font=("", 9)).pack(side=tk.LEFT, padx=(8, 2))
         alert_act = ttk.Combobox(altrow, textvariable=self._vars["alert_action"],
                                  width=6, state="readonly", font=("", 9))
         alert_act["values"] = ["click", "stop"]
-        alert_act.pack(side=tk.LEFT, padx=(4, 0))
+        alert_act.pack(side=tk.LEFT)
 
-        # 排除图片过滤行(如结界失败标记)
-        excrow = ttk.Frame(lfc)
-        excrow.pack(fill=tk.X, pady=(4, 0))
-        ttk.Checkbutton(excrow, text="排除过滤图片:",
-                        variable=self._vars["exclude_enabled"]).pack(side=tk.LEFT)
-        ttk.Entry(excrow, textvariable=self._vars["exclude_img"], width=18,
-                  state="readonly", font=("", 8)).pack(side=tk.LEFT, padx=(4, 4))
-
-        def _browse_exclude():
-            from tkinter import filedialog
-            path = filedialog.askopenfilename(
-                title="选择排除标记图片(如结界突破失败标记)",
-                filetypes=[("图片文件", "*.png *.jpg *.jpeg *.bmp"),
-                           ("所有文件", "*.*")])
-            if path:
-                self._vars["exclude_img"].set(path)
-                widgets.update_img_preview(path, self._previews["exclude"])
-
-        def _crop_exclude():
-            path = self._crop_to("exclude")
-            if path:
-                self._vars["exclude_img"].set(path)
-                widgets.update_img_preview(path, self._previews["exclude"])
-
-        ttk.Button(excrow, text="浏览", command=_browse_exclude, width=6
-                   ).pack(side=tk.LEFT)
-        ttk.Button(excrow, text="截图", command=_crop_exclude, width=6
-                   ).pack(side=tk.LEFT, padx=(5, 0))
-        ttk.Label(excrow, text="置信度:", font=("", 8)).pack(
-            side=tk.LEFT, padx=(10, 2))
-        ttk.Entry(excrow, textvariable=self._vars["exclude_conf"], width=4,
-                  font=("", 9)).pack(side=tk.LEFT)
-        pf_exclude = tk.Frame(excrow, width=80, height=50, bg="#e8e8e8",
-                              relief=tk.SUNKEN, bd=1)
-        pf_exclude.pack(side=tk.LEFT, padx=(8, 10))
-        pf_exclude.pack_propagate(False)
-        self._previews["exclude"] = tk.Label(
-            pf_exclude, bg="#e8e8e8", fg="#888888", text="无", font=("", 8))
-        self._previews["exclude"].pack(fill=tk.BOTH, expand=True)
-
-        ttk.Label(excrow, text="关联间距(px):", font=("", 9)).pack(side=tk.LEFT)
-        ttk.Entry(excrow, textvariable=self._vars["exclude_dist"], width=5,
-                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 0))
-
-        prow = ttk.Frame(lfc)
-        prow.pack(fill=tk.X, pady=(6, 0))
-        ttk.Label(prow, text="次数上限:", font=("", 9)).pack(side=tk.LEFT)
-        ttk.Entry(prow, textvariable=self._vars["max_runs"], width=6,
-                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 12))
-        ttk.Label(prow, text="战斗超时(秒):", font=("", 9)).pack(side=tk.LEFT)
-        ttk.Entry(prow, textvariable=self._vars["battle_timeout"], width=5,
-                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
-        ttk.Label(prow, text="0=不限,一直等胜负", foreground="gray",
-                  font=("", 8)).pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Label(prow, text="开始图点击次数:", font=("", 9)).pack(side=tk.LEFT)
-        ttk.Entry(prow, textvariable=self._vars["battle_clicks"], width=3,
-                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 10))
-        ttk.Label(prow, text="同图多个时点:", font=("", 9)).pack(side=tk.LEFT)
-        strat = ttk.Combobox(prow, textvariable=self._vars["match_strategy"],
-                             width=7, state="readonly", font=("", 9))
-        strat["values"] = ["最高分", "最上面", "最左边"]
-        strat.pack(side=tk.LEFT, padx=(4, 10))
-
-        # 异常应对行:没进战斗自愈 + 看门狗
-        arow = ttk.Frame(lfc)
+        # 进战斗重试 + 看门狗
+        arow = ttk.Frame(heal_c)
         arow.pack(fill=tk.X, pady=(6, 0))
         ttk.Label(arow, text="进战斗重试等待(秒):", font=("", 9)).pack(side=tk.LEFT)
         ttk.Entry(arow, textvariable=self._vars["reenter_check"], width=4,
                   font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
-        ttk.Label(arow, text="点开始图后等N秒仍见开始图=点击没生效,自动重点(0=关闭)",
-                  foreground="gray", font=("", 8)).pack(side=tk.LEFT, padx=(0, 12))
-        ttk.Label(arow, text="看门狗(秒):", font=("", 9)).pack(side=tk.LEFT)
+        ttk.Label(arow, text="点开始后未进入自动重点(0=关)",
+                  foreground="gray", font=("", 8)).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Label(arow, text="战斗看门狗(秒):", font=("", 9)).pack(side=tk.LEFT)
         ttk.Entry(arow, textvariable=self._vars["watchdog_timeout"], width=5,
                   font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
-        ttk.Label(arow, text="战斗中无动静超N秒→存现场+按错误策略处理(0=关闭)",
+        ttk.Label(arow, text="无动静超时保护(0=关)",
                   foreground="gray", font=("", 8)).pack(side=tk.LEFT)
-        ttk.Label(prow, text="超时点击坐标:", font=("", 9)).pack(side=tk.LEFT)
-        ttk.Entry(prow, textvariable=self._vars["timeout_x"], width=5,
+
+        # 战斗超时设置 + 独立行：超时脱离点击坐标 (彻底解决溢出！)
+        trow = ttk.Frame(heal_c)
+        trow.pack(fill=tk.X, pady=(6, 0))
+        ttk.Label(trow, text="战斗超时(秒):", font=("", 9)).pack(side=tk.LEFT)
+        ttk.Entry(trow, textvariable=self._vars["battle_timeout"], width=5,
                   font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
-        ttk.Label(prow, text=",", font=("", 9)).pack(side=tk.LEFT)
-        ttk.Entry(prow, textvariable=self._vars["timeout_y"], width=5,
+        ttk.Label(trow, text="0=不限", foreground="gray", font=("", 8)).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Label(trow, text="超时脱离点击坐标:", font=("", 9)).pack(side=tk.LEFT)
+        ttk.Entry(trow, textvariable=self._vars["timeout_x"], width=5,
+                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
+        ttk.Label(trow, text=",", font=("", 9)).pack(side=tk.LEFT)
+        ttk.Entry(trow, textvariable=self._vars["timeout_y"], width=5,
                   font=("", 9)).pack(side=tk.LEFT, padx=(2, 4))
-        ttk.Button(prow, text="截取坐标", command=self._pick_coord, width=8
+        ttk.Button(trow, text="截取坐标", command=self._pick_coord, width=8
                    ).pack(side=tk.LEFT, padx=(4, 0))
 
-        # 找图超时行：找不到开始图超时后点激活坐标重新激活，再失败则停止
-        frow = ttk.Frame(lfc)
+        # 找图超时与激活坐标
+        frow = ttk.Frame(heal_c)
         frow.pack(fill=tk.X, pady=(6, 0))
         ttk.Label(frow, text="找图超时(秒):", font=("", 9)).pack(side=tk.LEFT)
         ttk.Entry(frow, textvariable=self._vars["find_timeout"], width=5,
-                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 12))
-        ttk.Label(frow, text="0=不启用。超时后点击激活坐标重试一次，仍找不到则自动停止",
-                  foreground="gray", font=("", 8)).pack(side=tk.LEFT, padx=(0, 12))
+                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
+        ttk.Label(frow, text="0=关", foreground="gray", font=("", 8)).pack(side=tk.LEFT, padx=(0, 16))
         ttk.Label(frow, text="激活点击坐标:", font=("", 9)).pack(side=tk.LEFT)
         ttk.Entry(frow, textvariable=self._vars["find_x"], width=5,
                   font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
@@ -558,62 +467,76 @@ class BotTab(ttk.Frame):
         ttk.Button(frow, text="截取坐标", command=self._pick_find_coord, width=8
                    ).pack(side=tk.LEFT, padx=(4, 0))
 
-        # 滚动查找行:找不到图时周期性滚轮/拖拽(结界突破式列表查找)
-        scrow = ttk.Frame(lfc)
-        scrow.pack(fill=tk.X, pady=(6, 0))
-        ttk.Checkbutton(scrow, text="找不到图时自动滚动:",
-                        variable=self._vars["scroll_enabled"]).pack(
-            side=tk.LEFT)
-        mode = ttk.Combobox(scrow, textvariable=self._vars["scroll_mode"],
-                            width=6, state="readonly", font=("", 9))
-        mode["values"] = ["滚轮", "拖拽"]
-        mode.pack(side=tk.LEFT, padx=(4, 10))
-        ttk.Label(scrow, text="滚轮格数(负=向下):", font=("", 9)).pack(side=tk.LEFT)
-        ttk.Entry(scrow, textvariable=self._vars["scroll_ticks"], width=4,
-                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 12))
-        ttk.Label(scrow, text="拖拽起点:", font=("", 9)).pack(side=tk.LEFT)
-        ttk.Entry(scrow, textvariable=self._vars["drag_from_x"], width=5,
-                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
-        ttk.Label(scrow, text=",", font=("", 9)).pack(side=tk.LEFT)
-        ttk.Entry(scrow, textvariable=self._vars["drag_from_y"], width=5,
-                  font=("", 9)).pack(side=tk.LEFT, padx=(2, 4))
-        ttk.Button(scrow, text="截取起点", command=lambda:
-                   self._pick_into("drag_from_x", "drag_from_y"),
-                   width=8).pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Label(scrow, text="终点:", font=("", 9)).pack(side=tk.LEFT)
-        ttk.Entry(scrow, textvariable=self._vars["drag_to_x"], width=5,
-                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
-        ttk.Label(scrow, text=",", font=("", 9)).pack(side=tk.LEFT)
-        ttk.Entry(scrow, textvariable=self._vars["drag_to_y"], width=5,
-                  font=("", 9)).pack(side=tk.LEFT, padx=(2, 4))
-        ttk.Button(scrow, text="截取终点", command=lambda:
-                   self._pick_into("drag_to_x", "drag_to_y"),
-                   width=8).pack(side=tk.LEFT, padx=(4, 10))
-        ttk.Label(scrow, text="每隔(秒):", font=("", 9)).pack(side=tk.LEFT)
-        ttk.Entry(scrow, textvariable=self._vars["scroll_interval"], width=4,
-                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 0))
+        # 找不到开始图动作
+        erow = ttk.Frame(heal_c)
+        erow.pack(fill=tk.X, pady=(6, 0))
+        ttk.Label(erow, text="找不到开始图时的动作:", font=("", 9)).pack(side=tk.LEFT)
+        err = ttk.Combobox(erow, textvariable=self._vars["error_action"],
+                           width=10, state="readonly", font=("", 9))
+        err["values"] = ["continue", "stop"]
+        err.pack(side=tk.LEFT, padx=(4, 6))
+        ttk.Label(erow, text="continue=继续寻找重试，stop=安全停止挂机",
+                  foreground="gray", font=("", 8)).pack(side=tk.LEFT)
 
-        rrow = ttk.Frame(lfc)
-        rrow.pack(fill=tk.X, pady=(6, 0))
+        # ===== 4.【辅助】拟人防封与列表滚动 =====
+        aux_lf = ttk.LabelFrame(main, text="【辅助】拟人防封与列表滚动", padding="8")
+        aux_lf.pack(fill=tk.X, pady=(0, 8))
+        aux_c = self._make_collapsible(aux_lf, default_open=False)
+
+        # 拟人休息
+        rrow = ttk.Frame(aux_c)
+        rrow.pack(fill=tk.X, pady=(2, 0))
         ttk.Label(rrow, text="每(N次)休息:", font=("", 9)).pack(side=tk.LEFT)
         ttk.Entry(rrow, textvariable=self._vars["rest_every"], width=7,
                   font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
         ttk.Label(rrow, text="如 8-12", foreground="gray", font=("", 8)
-                  ).pack(side=tk.LEFT, padx=(2, 12))
+                  ).pack(side=tk.LEFT, padx=(2, 16))
         ttk.Label(rrow, text="休息时长(秒):", font=("", 9)).pack(side=tk.LEFT)
         ttk.Entry(rrow, textvariable=self._vars["rest_seconds"], width=7,
                   font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
         ttk.Label(rrow, text="如 5-10", foreground="gray", font=("", 8)
-                  ).pack(side=tk.LEFT, padx=(2, 12))
-        ttk.Label(rrow, text="找不到开始图:", font=("", 9)).pack(side=tk.LEFT)
-        err = ttk.Combobox(rrow, textvariable=self._vars["error_action"],
-                           width=8, state="readonly", font=("", 9))
-        err["values"] = ["continue", "stop"]
-        err.pack(side=tk.LEFT, padx=(4, 0))
+                  ).pack(side=tk.LEFT, padx=(2, 0))
 
+        # 滚动查找
+        scrow1 = ttk.Frame(aux_c)
+        scrow1.pack(fill=tk.X, pady=(6, 0))
+        ttk.Checkbutton(scrow1, text="找不到图时自动滚动:",
+                        variable=self._vars["scroll_enabled"]).pack(side=tk.LEFT)
+        mode = ttk.Combobox(scrow1, textvariable=self._vars["scroll_mode"],
+                            width=6, state="readonly", font=("", 9))
+        mode["values"] = ["滚轮", "拖拽"]
+        mode.pack(side=tk.LEFT, padx=(4, 12))
+        ttk.Label(scrow1, text="滚轮格数(负=向下):", font=("", 9)).pack(side=tk.LEFT)
+        ttk.Entry(scrow1, textvariable=self._vars["scroll_ticks"], width=4,
+                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 12))
+        ttk.Label(scrow1, text="滚动间隔(秒):", font=("", 9)).pack(side=tk.LEFT)
+        ttk.Entry(scrow1, textvariable=self._vars["scroll_interval"], width=4,
+                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 0))
 
-        # ===== 副本入口/结束(可选,双层循环如困难28探索) =====
-        df = ttk.LabelFrame(main, text="副本入口/结束(可选)", padding="8")
+        # 拖拽坐标行
+        scrow2 = ttk.Frame(aux_c)
+        scrow2.pack(fill=tk.X, pady=(4, 0))
+        ttk.Label(scrow2, text="拖拽起点:", font=("", 9)).pack(side=tk.LEFT)
+        ttk.Entry(scrow2, textvariable=self._vars["drag_from_x"], width=5,
+                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
+        ttk.Label(scrow2, text=",", font=("", 9)).pack(side=tk.LEFT)
+        ttk.Entry(scrow2, textvariable=self._vars["drag_from_y"], width=5,
+                  font=("", 9)).pack(side=tk.LEFT, padx=(2, 4))
+        ttk.Button(scrow2, text="截取起点", command=lambda:
+                   self._pick_into("drag_from_x", "drag_from_y"),
+                   width=8).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Label(scrow2, text="拖拽终点:", font=("", 9)).pack(side=tk.LEFT)
+        ttk.Entry(scrow2, textvariable=self._vars["drag_to_x"], width=5,
+                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
+        ttk.Label(scrow2, text=",", font=("", 9)).pack(side=tk.LEFT)
+        ttk.Entry(scrow2, textvariable=self._vars["drag_to_y"], width=5,
+                  font=("", 9)).pack(side=tk.LEFT, padx=(2, 4))
+        ttk.Button(scrow2, text="截取终点", command=lambda:
+                   self._pick_into("drag_to_x", "drag_to_y"),
+                   width=8).pack(side=tk.LEFT, padx=(4, 0))
+
+        # ===== 5.【循环】副本外层循环(可选,双层循环如困难28探索) =====
+        df = ttk.LabelFrame(main, text="【循环】副本外层循环(可选)", padding="8")
         df.pack(fill=tk.X, pady=(0, 8))
         dfc = self._make_collapsible(df, default_open=False)
         ttk.Label(dfc, text="流程: 入口图1[→入口图2] → 开始图循环战斗 → 识别到结束图后点击并重新进入",
@@ -683,6 +606,7 @@ class BotTab(ttk.Frame):
 
         # 流程点管线:当前环节高亮(状态可视化)
         self._flow_stages = [("entry1", "入口1"), ("entry2", "入口2"),
+                             ("team", "等待发车"),
                              ("challenge", "开始图"), ("second", "二段"),
                              ("battle", "战斗"), ("settle", "结算"),
                              ("end", "收尾")]
@@ -1145,6 +1069,7 @@ class BotTab(ttk.Frame):
         "find_entry2": "entry2", "click_entry2": "entry2",
         "find_challenge": "challenge", "click_challenge": "challenge",
         "timeout_handled": "challenge",
+        "wait_team": "team",
         "find_second": "second", "click_second": "second",
         "wait_battle": "battle",
         "settlement": "settle", "click_end": "end",
@@ -1177,6 +1102,7 @@ class BotTab(ttk.Frame):
         """按 profile 决定哪些环节参与显示(start 时调用)。"""
         self._flow_enabled = {
             "challenge", "battle", "settle",
+            "team" if profile.team_role == "队员" else None,
             "entry1" if profile.entry_enabled else None,
             "entry2" if (profile.entry_enabled and profile.entry2_enabled)
             else None,
@@ -1189,12 +1115,18 @@ class BotTab(ttk.Frame):
         if kind == "log":
             self.log(data["message"])
         elif kind == "state":
+            st_val = data["state"].value
+            color = "#0a7d18"
+            if st_val in ("idle", "stopped"):
+                color = "gray"
+            elif st_val == "error":
+                color = "red"
+            elif st_val == "wait_team":
+                color = "#d97706"
             self.state_label.config(
-                text=STATE_TEXT.get(data["state"].value, data["state"].value),
-                foreground="green" if data["state"].value not in (
-                    "idle", "stopped", "error") else
-                    ("red" if data["state"].value == "error" else "gray"))
-            self._update_flow(data["state"].value)
+                text=STATE_TEXT.get(st_val, st_val),
+                foreground=color)
+            self._update_flow(st_val)
             self._set_tab_title()
         elif kind == "progress":
             runs, max_runs = data["runs"], data["max_runs"]
