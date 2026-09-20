@@ -136,6 +136,7 @@ class BattleProfile:
     run_mode: str = "后台"         # 前台 | 后台
     window_keyword: str = ""       # 后台窗口标题关键词
     detect_interval: float = 0.5   # 检测间隔（秒）
+    adaptive_interval: bool = True # 自适应心跳: 战斗期间自动放宽间隔降低 CPU 占用
 
     def to_dict(self) -> dict:
         d = dict(self.__dict__)

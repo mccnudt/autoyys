@@ -85,6 +85,17 @@ class TestTemplateMatcher:
             assert not m.matched
             assert m.center is None
 
+    def test_shared_registry_across_matchers(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.png")
+            _write_tpl(p, 20)
+            m1 = TemplateMatcher()
+            m2 = TemplateMatcher()
+            assert m1.registry is m2.registry
+            a = m1.registry.load(p)
+            b = m2.registry.load(p)
+            assert a is not None and a is b
+
 
 class TestScreenDetector:
 

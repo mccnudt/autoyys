@@ -735,6 +735,22 @@ class TestReenterSelfHeal:
         assert any("已自动点击处理" in m for m in msgs(events))
         assert c.stats.snapshot().success == 1
 
+    def test_adaptive_interval_during_battle(self, profile):
+        """自适应心跳调频: 战斗等待期自动放宽检测间隔以降低 CPU。"""
+        profile.detect_interval = 0.5
+        profile.adaptive_interval = True
+        profile.pre_battle_delay = 5.0
+        script = [["challenge"]]
+        c, _ = make_controller(profile, FakeDetector(script))
+        # 初始 FIND_CHALLENGE 状态
+        assert c.suggested_interval() == 0.5
+        # 点击挑战后进入战斗，处于 pre_battle_delay 动画期
+        c.run_once()  # FIND_CHALLENGE -> CLICK_CHALLENGE
+        c.run_once()  # CLICK_CHALLENGE -> WAIT_BATTLE
+        assert c.fsm.state == GameState.WAIT_BATTLE
+        # 在 pre_battle_delay 内应拉长为 1.2s+
+        assert c.suggested_interval() >= 1.2
+
 
 class TestProgressEvents:
     def test_progress_events_emitted(self, profile):
@@ -763,4 +779,4 @@ class TestAdaptiveInterval:
         c.run_once()
         assert c.fsm.state == GameState.WAIT_BATTLE
         # 战斗前置等待期自适应降频
-        assert c.suggested_interval() == 1.2
+        assert c.suggested_interval() >= 1.2

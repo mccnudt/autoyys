@@ -56,11 +56,22 @@ class TemplateRegistry:
         self._cache.clear()
 
 
+_SHARED_REGISTRY: Optional[TemplateRegistry] = None
+
+
+def get_shared_registry() -> TemplateRegistry:
+    """获取进程级全局共享模板缓存(跨多标签页复用已解码的模板内存)。"""
+    global _SHARED_REGISTRY
+    if _SHARED_REGISTRY is None:
+        _SHARED_REGISTRY = TemplateRegistry()
+    return _SHARED_REGISTRY
+
+
 class TemplateMatcher:
     """cv2TM_CCOEFF_NORMED 模板匹配，返回目标中心点。"""
 
     def __init__(self, registry: Optional[TemplateRegistry] = None) -> None:
-        self.registry = registry or TemplateRegistry()
+        self.registry = registry or get_shared_registry()
 
     def find(self, image: np.ndarray, template_name: str,
              threshold: float, strategy: str = "best") -> MatchResult:

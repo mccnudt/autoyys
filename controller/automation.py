@@ -698,6 +698,32 @@ class AutomationController:
                 and self._capture_fail_streak >= 12:
             self._error(exc)
 
+    def get_adaptive_interval(self) -> float:
+        """自适应心跳：根据当前状态与运行阶段动态调节轮询间隔，降低 CPU 消耗。"""
+        if not self.profile:
+            return 0.5
+        base = self.profile.detect_interval
+        if not getattr(self.profile, "adaptive_interval", True) or base < 0.2:
+            return base
+
+        state = self.fsm.state
+        # 战斗期间放宽检测间隔
+        if state == GameState.WAIT_BATTLE:
+            now = self._clock()
+            # 战斗前置动画等待期内
+            if now - self._battle_started_at < self.profile.pre_battle_delay:
+                return max(base * 2.5, 1.2)
+            # 正常战斗进行期
+            return max(base * 2.0, 1.0)
+        # 点击后的小缓冲期
+        if state in (GameState.CLICK_CHALLENGE, GameState.CLICK_SECOND,
+                     GameState.CLICK_ENTRY, GameState.CLICK_ENTRY2,
+                     GameState.CLICK_END):
+            return max(base, 0.5)
+        return base
+
+    suggested_interval = get_adaptive_interval
+
 
 def _random_from_range(range_str: str, default: Optional[int] = None) -> Optional[int]:
     """解析 "8-12" 并返回随机整数；无效返回 default。"""
