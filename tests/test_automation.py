@@ -79,7 +79,8 @@ class TestNormalFlow:
     def test_settlement_confirm_clicked_when_configured(self, profile):
         profile.confirm_img = "confirm.png"
         # 挑战 -> 胜利 -> 结算确认
-        script = [["challenge"], [], ["victory"], ["victory"], [], ["settlement"], []]
+        script = [["challenge"], [], ["victory"],
+                  ["victory"], [], ["settlement"], []]
         c, _ = make_controller(profile, FakeDetector(script))
         for _ in range(40):
             c.run_once()
@@ -278,7 +279,8 @@ class TestFindTimeout:
         profile.find_timeout = 2.0
         profile.find_timeout_click = (700, 300)
         profile.max_runs = 2
-        script = [[], [], [], [], ["challenge"], [], ["victory"], ["victory"], []]
+        script = [[], [], [], [], ["challenge"],
+                  [], ["victory"], ["victory"], []]
         c, events = make_controller(profile, FakeDetector(script))
         for _ in range(80):
             c.run_once()
@@ -322,7 +324,8 @@ class TestSecondStage:
     def test_second_stage_flow(self, profile):
         profile.second_enabled = True
         profile.second_img = "attack.png"
-        script = [["challenge"], [], ["second"], [], ["victory"], ["victory"], []]
+        script = [["challenge"], [], ["second"],
+                  [], ["victory"], ["victory"], []]
         profile.max_runs = 1
         c, events = make_controller(profile, FakeDetector(script))
         for _ in range(40):
@@ -355,14 +358,14 @@ class TestSecondStage:
         assert c.finished and c.stats.snapshot().success == 3
         assert (400, 300, 1) not in c.input.clicks  # 未启用:无单击
 
-
     def test_second_delay_waits_before_finding(self, profile):
         """第二段前等待:进入 FIND_SECOND 后 delay 秒内不检测,避免过渡动画误点。"""
         profile.second_enabled = True
         profile.second_img = "attack.png"
         profile.second_delay = 3.0
         profile.max_runs = 1
-        script = [["challenge"], [], ["second"], [], ["victory"], ["victory"], []]
+        script = [["challenge"], [], ["second"],
+                  [], ["victory"], ["victory"], []]
         c, _ = make_controller(profile, FakeDetector(script))
         c.run_once()   # 检测到开始图 -> CLICK_CHALLENGE
         c.run_once()   # 点击 -> 进入 FIND_SECOND
@@ -391,7 +394,8 @@ class TestSecondStage:
         profile.second_img = "attack.png"
         profile.second_delay = 0
         profile.max_runs = 1
-        script = [["challenge"], [], ["second"], [], ["victory"], ["victory"], []]
+        script = [["challenge"], [], ["second"],
+                  [], ["victory"], ["victory"], []]
         c, _ = make_controller(profile, FakeDetector(script))
         for _ in range(30):
             c.run_once()
@@ -603,7 +607,6 @@ class TestReenterSelfHeal:
         wins = [m for m in msgs(events) if "胜利" in m]
         assert len(wins) == 1
 
-
     def test_reenter_covers_alt_image(self, profile):
         """备选开始图与主图平级:卡住时显示的是备选图形态也能自愈重点。"""
         profile.alt_enabled = True
@@ -651,7 +654,7 @@ class TestReenterSelfHeal:
         # 开始图点击后，第二段界面未展开，屏幕持续显示 challenge 图
         # 超过 3s 后触发自愈重点击开始图；重点击后第二段图出现并点击，随后胜利
         script = [["challenge"]] + [["challenge"]] * 10 + [["second"], ["second"],
-                  ["victory"], ["victory"], []]
+                                                           ["victory"], ["victory"], []]
         c, events = make_controller(profile, FakeDetector(script))
         for _ in range(50):
             c.run_once()
@@ -678,6 +681,58 @@ class TestReenterSelfHeal:
             if c.finished:
                 break
         assert any("仍看到第二段图" in m for m in msgs(events))
+        assert c.stats.snapshot().success == 1
+
+    def test_alert_click_action_handles_popup_and_continues(self, profile):
+        """异常弹窗拦截(click): 发现弹窗自动点击处理并继续正常挂机。"""
+        profile.alert_enabled = True
+        profile.alert_img = "alert.png"
+        profile.alert_action = "click"
+        profile.max_runs = 1
+        # 找挑战时遇到弹窗 -> 自动点击弹窗 -> 随后出现开始图 -> 胜利
+        script = [["alert"], ["challenge"], [], ["victory"], ["victory"], []]
+        c, events = make_controller(profile, FakeDetector(script))
+        for _ in range(30):
+            c.run_once()
+            if c.finished:
+                break
+        assert any("已自动点击处理" in m for m in msgs(events))
+        assert c.stats.snapshot().success == 1
+        # 弹窗被点击(400, 300, 1)
+        assert (400, 300, 1) in c.input.clicks
+
+    def test_alert_stop_action_stops_immediately(self, profile):
+        """异常弹窗拦截(stop): 发现弹窗(如体力耗尽)自动安全停止挂机。"""
+        profile.alert_enabled = True
+        profile.alert_img = "alert.png"
+        profile.alert_action = "stop"
+        profile.max_runs = 10
+        # 找挑战时遇到弹窗 -> 立即停止
+        script = [["alert"]]
+        c, events = make_controller(profile, FakeDetector(script))
+        for _ in range(10):
+            c.run_once()
+            if c.finished:
+                break
+        assert any("按配置自动停止挂机" in m for m in msgs(events))
+        assert c.finished
+        assert c.fsm.state == GameState.STOPPED
+
+    def test_alert_handled_during_wait_battle(self, profile):
+        """异常弹窗拦截: 战斗等待期出现弹窗(如断线/协同邀请)自动点击处理。"""
+        profile.alert_enabled = True
+        profile.alert_img = "alert.png"
+        profile.alert_action = "click"
+        profile.pre_battle_delay = 0.5
+        profile.max_runs = 1
+        # 开始战斗 -> 进入 WAIT_BATTLE -> 出现弹窗并点击 -> 随后胜利
+        script = [["challenge"], ["alert"], ["victory"], ["victory"], []]
+        c, events = make_controller(profile, FakeDetector(script))
+        for _ in range(30):
+            c.run_once()
+            if c.finished:
+                break
+        assert any("已自动点击处理" in m for m in msgs(events))
         assert c.stats.snapshot().success == 1
 
 

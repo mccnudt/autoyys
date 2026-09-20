@@ -158,7 +158,8 @@ class AutomationController:
         except Exception:
             pass
         self.debug.save_error(img, exc)
-        self._log(f"   已保存错误现场，{self.debug.describe_image(img) if img is not None else '截图失败'}")
+        self._log(
+            f"   已保存错误现场，{self.debug.describe_image(img) if img is not None else '截图失败'}")
         if isinstance(exc, WindowLost) or (
                 self.profile and self.profile.error_action == "stop"):
             self._goto(GameState.ERROR)
@@ -232,8 +233,13 @@ class AutomationController:
             return
         st = ScreenType.ENTRY if which == 1 else ScreenType.ENTRY2
         label = f"入口图{which}"
-        res = self.detector.detect(img, self.profile, [st],
+        types = [st]
+        if self.profile.alert_enabled and self.profile.alert_img:
+            types.append(ScreenType.ALERT)
+        res = self.detector.detect(img, self.profile, types,
                                    strategy=self.profile.match_strategy)
+        if self._handle_alert_if_present(img, res):
+            return
         m = res.first(st)
         if m is not None:
             self._click_target = m.center
@@ -303,12 +309,16 @@ class AutomationController:
             types.append(ScreenType.CHALLENGE_ALT)
         if self.profile.end_enabled and self.profile.end_img:
             types.append(ScreenType.END)
+        if self.profile.alert_enabled and self.profile.alert_img:
+            types.append(ScreenType.ALERT)
         res = self.detector.detect(img, self.profile, types,
                                    strategy=self.profile.match_strategy)
+        if self._handle_alert_if_present(img, res):
+            return
         m = res.first(ScreenType.CHALLENGE, ScreenType.CHALLENGE_ALT)
         if m is not None:
             nxt = self.fsm.update(detected=True, has_result=False,
-                                  timed_out=False)
+                                   timed_out=False)
             if nxt != self.fsm.state:
                 self._click_target = m.center
                 self._goto(nxt)
@@ -323,6 +333,26 @@ class AutomationController:
 
         # 找图超时：先点击激活坐标重新激活一次，仍找不到则停止
         self._find_timeout_common(img, now, "战斗开始图")
+
+    def _handle_alert_if_present(self, img, res) -> bool:
+        """若检测到通用异常弹窗(如体力耗尽/网络断线/协同邀请),按配置处理并返回 True。"""
+        if not (self.profile.alert_enabled and res.alert is not None and res.alert.matched):
+            return False
+        pos = res.alert.center
+        if self.profile.alert_action == "stop":
+            self._log("🛑 检测到异常弹窗（如体力耗尽），按配置自动停止挂机")
+            self.debug.save_error(img, AutoBotError("检测到异常弹窗，按配置停止"))
+            self._goto(GameState.STOPPED)
+            self._finished = True
+            return True
+        else:
+            self.input.click(pos[0], pos[1], clicks=1)
+            self._log(f"🔔 检测到异常弹窗，已自动点击处理 ({pos[0]}, {pos[1]})")
+            # 重置找图状态与战斗计时窗口，避免由于弹窗阻断而导致超时
+            now = self._clock()
+            self._state_entered_at = now
+            self._battle_started_at = now
+            return True
 
     def _find_timeout_common(self, img, now: float, label: str) -> None:
         """找图状态(FIND_CHALLENGE/FIND_SECOND)共用的超时-激活-停止逻辑。"""
@@ -404,9 +434,13 @@ class AutomationController:
             types.append(ScreenType.CHALLENGE)
             if self.profile.alt_enabled and self.profile.alt_battle_img:
                 types.append(ScreenType.CHALLENGE_ALT)
+        if self.profile.alert_enabled and self.profile.alert_img:
+            types.append(ScreenType.ALERT)
 
         res = self.detector.detect(img, self.profile, types,
                                    strategy=self.profile.match_strategy)
+        if self._handle_alert_if_present(img, res):
+            return
         m = res.first(ScreenType.SECOND)
         if m is not None:
             self._click_target = m.center
@@ -452,7 +486,7 @@ class AutomationController:
         now = self._clock()
         if now - self._battle_started_at < self.profile.pre_battle_delay:
             return
-        # 检测:胜负 + (启用时)式神 + 开始图/第二段图(用于"没进战斗"判定)
+        # 检测:胜负 + (启用时)式神 + 开始图/第二段图(用于"没进战斗"判定) + (启用时)异常弹窗
         want_shikigami = (self.profile.shikigami_enabled
                           and self.profile.shikigami_img
                           and not self._shikigami_clicked)
@@ -466,6 +500,8 @@ class AutomationController:
                 types.append(ScreenType.CHALLENGE_ALT)
             if self.profile.second_enabled and self.profile.second_img:
                 types.append(ScreenType.SECOND)
+        if self.profile.alert_enabled and self.profile.alert_img:
+            types.append(ScreenType.ALERT)
         res = self.detector.detect(img, self.profile, types)
         m = res.first(ScreenType.VICTORY, ScreenType.FAILURE)
         if m is not None:
@@ -494,6 +530,8 @@ class AutomationController:
             self._shikigami_clicked = True
             self._log(f"   已点击式神 ({pos[0]}, {pos[1]})")
             return
+        if self._handle_alert_if_present(img, res):
+            return
         # "没进战斗"自愈:等了 reenter_check 秒仍能看到第二段图或开始图
         # (a) 若为两段战斗且仍看到第二段图(如进攻) → 进攻点击未生效,重点第二段图
         # (b) 若仍看到开始图(主图或备选图) → 开始图点击未生效,重点开始图
@@ -512,7 +550,8 @@ class AutomationController:
                 if self._reentered_count <= 3:
                     self._log(f"⚠ 进战斗{rc:.0f}秒后仍看到第二段图(进攻)，疑似点击未生效，"
                               f"重新点击第二段图(第{self._reentered_count}次)")
-                    self.input.click(seen_second.center[0], seen_second.center[1], clicks=1)
+                    self.input.click(
+                        seen_second.center[0], seen_second.center[1], clicks=1)
                 else:
                     self._log(f"⚠ 已重点第二段图{self._reentered_count - 1}次仍未进入战斗，"
                               f"疑似界面异常，保存现场")

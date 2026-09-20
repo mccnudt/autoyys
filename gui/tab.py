@@ -112,6 +112,10 @@ class BotTab(ttk.Frame):
         ("window_keyword", "window_keyword", "str"),
         ("drag_from", "drag_from", "coord"),
         ("drag_to", "drag_to", "coord"),
+        ("alert_enabled", "alert_enabled", "bool"),
+        ("alert_img", "alert_img", "img"),
+        ("alert_threshold", "alert_conf", "float"),
+        ("alert_action", "alert_action", "str"),
     ]
     # var 默认值覆盖:profile 默认 None/空时,UI 仍给合理初始值
     _VAR_DEFAULT_OVERRIDES = {
@@ -374,6 +378,52 @@ class BotTab(ttk.Frame):
         self._previews["shikigami"] = tk.Label(
             pf, bg="#e8e8e8", fg="#888888", text="无", font=("", 8))
         self._previews["shikigami"].pack(fill=tk.BOTH, expand=True)
+
+        # 通用异常弹窗拦截行
+        altrow = ttk.Frame(lfc)
+        altrow.pack(fill=tk.X, pady=(4, 0))
+        ttk.Checkbutton(altrow, text="异常弹窗拦截:",
+                        variable=self._vars["alert_enabled"]).pack(side=tk.LEFT)
+        ttk.Entry(altrow, textvariable=self._vars["alert_img"], width=18,
+                  state="readonly", font=("", 8)).pack(side=tk.LEFT, padx=(4, 4))
+
+        def _browse_alert():
+            from tkinter import filedialog
+            path = filedialog.askopenfilename(
+                title="选择异常弹窗按钮图片(如确定/取消/X)",
+                filetypes=[("图片文件", "*.png *.jpg *.jpeg *.bmp"),
+                           ("所有文件", "*.*")])
+            if path:
+                self._vars["alert_img"].set(path)
+                widgets.update_img_preview(path, self._previews["alert"])
+
+        def _crop_alert():
+            path = self._crop_to("alert")
+            if path:
+                self._vars["alert_img"].set(path)
+                widgets.update_img_preview(path, self._previews["alert"])
+
+        ttk.Button(altrow, text="浏览", command=_browse_alert, width=6
+                   ).pack(side=tk.LEFT)
+        ttk.Button(altrow, text="截图", command=_crop_alert, width=6
+                   ).pack(side=tk.LEFT, padx=(5, 0))
+        ttk.Label(altrow, text="置信度:", font=("", 8)).pack(
+            side=tk.LEFT, padx=(10, 2))
+        ttk.Entry(altrow, textvariable=self._vars["alert_conf"], width=4,
+                  font=("", 9)).pack(side=tk.LEFT)
+        pf_alert = tk.Frame(altrow, width=80, height=50, bg="#e8e8e8",
+                            relief=tk.SUNKEN, bd=1)
+        pf_alert.pack(side=tk.LEFT, padx=(8, 10))
+        pf_alert.pack_propagate(False)
+        self._previews["alert"] = tk.Label(
+            pf_alert, bg="#e8e8e8", fg="#888888", text="无", font=("", 8))
+        self._previews["alert"].pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(altrow, text="动作:", font=("", 9)).pack(side=tk.LEFT)
+        alert_act = ttk.Combobox(altrow, textvariable=self._vars["alert_action"],
+                                 width=6, state="readonly", font=("", 9))
+        alert_act["values"] = ["click", "stop"]
+        alert_act.pack(side=tk.LEFT, padx=(4, 0))
 
         prow = ttk.Frame(lfc)
         prow.pack(fill=tk.X, pady=(6, 0))

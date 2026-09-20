@@ -18,6 +18,7 @@ htmlcov/
 # IDE & Editors
 .vscode/
 .idea/
+.history/
 *.swp
 *.swo
 

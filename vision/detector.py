@@ -46,6 +46,8 @@ class ScreenDetector:
             ScreenType.SHIKIGAMI: (
                 profile.shikigami_img, profile.shikigami_threshold,
                 "shikigami"),
+            ScreenType.ALERT: (
+                profile.alert_img, profile.alert_threshold, "alert"),
         }
         for t in types:
             img_path, threshold, field = search[t]

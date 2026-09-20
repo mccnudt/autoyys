@@ -43,6 +43,7 @@ class ScreenType(Enum):
     FAILURE = "failure"            # 失败图
     SETTLEMENT = "settlement"      # 结算确认图
     SHIKIGAMI = "shikigami"        # 战斗中的式神（进入战斗后点击）
+    ALERT = "alert"                # 通用异常弹窗（体力不足/重连/邀请）
     NONE = "none"
 
 
@@ -62,6 +63,7 @@ class ScreenResult:
     failure: Optional[MatchResult] = None
     settlement: Optional[MatchResult] = None
     shikigami: Optional[MatchResult] = None
+    alert: Optional[MatchResult] = None
 
     def first(self, *types: ScreenType) -> Optional[MatchResult]:
         """按给定优先级返回第一个匹配成功的结果。"""
@@ -114,6 +116,10 @@ class BattleProfile:
     end_img: str = ""
     end_threshold: float = 0.7
     end_delay: float = 2.0         # 点完结束图后的小缓冲(回到找入口)
+    alert_enabled: bool = False    # 通用异常弹窗拦截(体力不足/断线/邀请)
+    alert_img: str = ""            # 弹窗按钮图片(如确定/取消/X)
+    alert_threshold: float = 0.8
+    alert_action: str = "click"    # click | stop
     max_runs: int = 100
     battle_timeout: float = 60.0   # WAIT_BATTLE 最长等待(秒),0=不限,一直等胜负图
     pre_battle_delay: float = 5.0  # 进入战斗后的动画前置等待（秒）
@@ -166,7 +172,8 @@ class BattleProfile:
                 ("第二段图", "second_enabled", "second_img"),
                 ("入口图1", "entry_enabled", "entry_img"),
                 ("入口图2", "entry2_enabled", "entry2_img"),
-                ("副本结束图", "end_enabled", "end_img")):
+                ("副本结束图", "end_enabled", "end_img"),
+                ("异常弹窗处理", "alert_enabled", "alert_img")):
             if getattr(self, en):
                 img_path = getattr(self, img)
                 if not img_path:

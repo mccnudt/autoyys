@@ -89,7 +89,7 @@ class FakeDetector:
              "failure": "failure", "settlement": "settlement",
              "shikigami": "shikigami", "challenge_alt": "challenge_alt",
              "second": "second", "entry": "entry", "entry2": "entry2",
-             "end": "end"}
+             "end": "end", "alert": "alert"}
 
     def __init__(self, script):
         self.script = list(script) or [[]]
@@ -124,7 +124,8 @@ def ScreenType_of(t):
             "second": ScreenType.SECOND,
             "entry": ScreenType.ENTRY,
             "entry2": ScreenType.ENTRY2,
-            "end": ScreenType.END}[t]
+            "end": ScreenType.END,
+            "alert": ScreenType.ALERT}[t]
 
 
 class FakeInput:
