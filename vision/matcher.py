@@ -74,38 +74,64 @@ class TemplateMatcher:
         self.registry = registry or get_shared_registry()
 
     def find(self, image: np.ndarray, template_name: str,
-             threshold: float, strategy: str = "best") -> MatchResult:
+             threshold: float, strategy: str = "best",
+             scales: Optional[Sequence[float]] = None) -> MatchResult:
         """在 image（BGR）中找 template_name（路径），返回 MatchResult。
 
         strategy: "best"=全局最高分(默认); "最上面"=命中里 y 最小;
                   "最左边"=命中里 x 最小(多目标用 NMS 去重)。
+        scales: 尺度列表，如 (1.0, 0.9, 1.1, 0.8, 1.25)，支持跨分辨率等比自适应。
         未找到时 center=None、score=最高分。
         """
         st = ScreenType.NONE
         tpl = self.registry.load(template_name)
         if image is None or image.size == 0 or tpl is None:
             return MatchResult(st, None, 0.0)
-        res = cv2.matchTemplate(image, tpl, cv2.TM_CCOEFF_NORMED)
-        th, tw = tpl.shape[:2]
-        if strategy in ("最上面", "最左边"):
-            ys, xs = np.where(res >= threshold)
-            if len(xs) == 0:
-                _, max_val, _, _ = cv2.minMaxLoc(res)
-                return MatchResult(st, None, float(max_val))
-            # 按分数降序做 NMS(模板半宽/半高内视为同一目标)
-            kept = []
-            for x, y in sorted(zip(xs.tolist(), ys.tolist()),
-                               key=lambda p: res[p[1], p[0]], reverse=True):
-                if all(abs(x - kx) >= tw // 2 or abs(y - ky) >= th // 2
-                       for kx, ky in kept):
-                    kept.append((x, y))
-            key = (lambda p: (p[1], p[0])) if strategy == "最上面" \
-                else (lambda p: (p[0], p[1]))
-            kx, ky = min(kept, key=key)
-            return MatchResult(st, (kx + tw // 2, ky + th // 2),
-                               float(res[ky, kx]))
-        _, max_val, _, max_loc = cv2.minMaxLoc(res)
-        if max_val >= threshold:
-            center = (max_loc[0] + tw // 2, max_loc[1] + th // 2)
-            return MatchResult(st, center, float(max_val))
-        return MatchResult(st, None, float(max_val))
+
+        search_scales = [1.0] if not scales else ([1.0] + [s for s in scales if s != 1.0])
+        best_match = MatchResult(st, None, 0.0)
+
+        ih, iw = image.shape[:2]
+        orig_th, orig_tw = tpl.shape[:2]
+
+        for s in search_scales:
+            if s == 1.0:
+                cur_tpl = tpl
+                tw, th = orig_tw, orig_th
+            else:
+                tw, th = int(orig_tw * s), int(orig_th * s)
+                if tw < 5 or th < 5 or tw > iw or th > ih:
+                    continue
+                cur_tpl = cv2.resize(tpl, (tw, th), interpolation=cv2.INTER_LINEAR)
+
+            if tw > iw or th > ih:
+                continue
+
+            res = cv2.matchTemplate(image, cur_tpl, cv2.TM_CCOEFF_NORMED)
+            if strategy in ("最上面", "最左边"):
+                ys, xs = np.where(res >= threshold)
+                if len(xs) == 0:
+                    _, max_val, _, _ = cv2.minMaxLoc(res)
+                    if max_val > best_match.score:
+                        best_match = MatchResult(st, None, float(max_val))
+                    continue
+                kept = []
+                for x, y in sorted(zip(xs.tolist(), ys.tolist()),
+                                   key=lambda p: res[p[1], p[0]], reverse=True):
+                    if all(abs(x - kx) >= tw // 2 or abs(y - ky) >= th // 2
+                           for kx, ky in kept):
+                        kept.append((x, y))
+                key = (lambda p: (p[1], p[0])) if strategy == "最上面" \
+                    else (lambda p: (p[0], p[1]))
+                kx, ky = min(kept, key=key)
+                return MatchResult(st, (kx + tw // 2, ky + th // 2),
+                                   float(res[ky, kx]))
+
+            _, max_val, _, max_loc = cv2.minMaxLoc(res)
+            if max_val >= threshold:
+                center = (max_loc[0] + tw // 2, max_loc[1] + th // 2)
+                return MatchResult(st, center, float(max_val))
+            if max_val > best_match.score:
+                best_match = MatchResult(st, None, float(max_val))
+
+        return best_match

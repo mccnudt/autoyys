@@ -96,6 +96,30 @@ class TestTemplateMatcher:
             b = m2.registry.load(p)
             assert a is not None and a is b
 
+    def test_multiscale_matching_finds_scaled_template(self):
+        """跨分辨率等比缩放: 模板在画面中尺寸缩放(如1.2倍)时，多尺度匹配能正确命中。"""
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.png")
+            # 原始模板 20x20
+            _write_tpl(p, 20)
+            # 在画面中放入 24x24 的放大版图案(1.2倍缩放)
+            screen = make_screen(120, 100)
+            import cv2
+            tpl_img = cv2.imread(p)
+            scaled_tpl = cv2.resize(tpl_img, (24, 24), interpolation=cv2.INTER_LINEAR)
+            screen[30:54, 40:64] = scaled_tpl
+
+            matcher = TemplateMatcher()
+            # 默认 1.0 尺度匹配低分不命中
+            m1 = matcher.find(screen, p, threshold=0.9, scales=[1.0])
+            assert not m1.matched
+
+            # 启用多尺度 scales=[1.0, 1.2, 0.8] 成功命中
+            m2 = matcher.find(screen, p, threshold=0.85, scales=[1.0, 1.2, 0.8])
+            assert m2.matched
+            assert abs(m2.center[0] - (40 + 12)) <= 2
+            assert abs(m2.center[1] - (30 + 12)) <= 2
+
 
 class TestScreenDetector:
 
