@@ -640,6 +640,46 @@ class TestReenterSelfHeal:
         # first(CHALLENGE, CHALLENGE_ALT) 语义下 challenge 优先
         assert c.stats.snapshot().success == 1
 
+    def test_find_second_reclicks_challenge_when_swallowed(self, profile):
+        """漏洞A自愈: 点开始图后第一段点击被吞(未展开第二段界面，仍看到开始图) → 自动重点开始图。"""
+        profile.second_enabled = True
+        profile.second_img = "second.png"
+        profile.second_delay = 1.0
+        profile.reenter_check = 3.0
+        profile.battle_clicks = 1
+        profile.max_runs = 1
+        # 开始图点击后，第二段界面未展开，屏幕持续显示 challenge 图
+        # 超过 3s 后触发自愈重点击开始图；重点击后第二段图出现并点击，随后胜利
+        script = [["challenge"]] + [["challenge"]] * 10 + [["second"], ["second"],
+                  ["victory"], ["victory"], []]
+        c, events = make_controller(profile, FakeDetector(script))
+        for _ in range(50):
+            c.run_once()
+            if c.finished:
+                break
+        assert any("等待第二段图超时，但仍看到开始图" in m for m in msgs(events))
+        assert c.stats.snapshot().success == 1
+
+    def test_wait_battle_second_stage_reclicks_second(self, profile):
+        """漏洞B自愈: 点进攻(第二段)后点击被吞(未进战斗，仍看到进攻图) → 自动重点进攻图。"""
+        profile.second_enabled = True
+        profile.second_img = "second.png"
+        profile.second_delay = 0.0
+        profile.pre_battle_delay = 0.5
+        profile.reenter_check = 3.0
+        profile.max_runs = 1
+        # 点击开始图 -> 点击第二段图 -> 进 WAIT_BATTLE 后屏幕依然是 second 图
+        # 超过 3s 后触发自愈重点第二段图；重点后第二段图消失，随后胜负图出现
+        script = [["challenge"], ["second"]] + [["second"]] * 10 \
+            + [[], [], ["victory"], ["victory"], []]
+        c, events = make_controller(profile, FakeDetector(script))
+        for _ in range(50):
+            c.run_once()
+            if c.finished:
+                break
+        assert any("仍看到第二段图" in m for m in msgs(events))
+        assert c.stats.snapshot().success == 1
+
 
 class TestProgressEvents:
     def test_progress_events_emitted(self, profile):

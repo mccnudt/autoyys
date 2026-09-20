@@ -397,13 +397,43 @@ class AutomationController:
         if now < self._rest_until:
             self._state_entered_at = now
             return
-        res = self.detector.detect(img, self.profile, [ScreenType.SECOND],
+
+        check_reenter = self.profile.reenter_check > 0
+        types = [ScreenType.SECOND]
+        if check_reenter:
+            types.append(ScreenType.CHALLENGE)
+            if self.profile.alt_enabled and self.profile.alt_battle_img:
+                types.append(ScreenType.CHALLENGE_ALT)
+
+        res = self.detector.detect(img, self.profile, types,
                                    strategy=self.profile.match_strategy)
         m = res.first(ScreenType.SECOND)
         if m is not None:
             self._click_target = m.center
             self._goto(GameState.CLICK_SECOND)
             return
+
+        # 漏洞A自愈: 第一段点击被吞判定(未看到第二段图, 但仍能看到开始图)
+        seen_challenge = res.challenge if (res.challenge is not None
+                                           and res.challenge.matched) else \
+            (res.challenge_alt if (res.challenge_alt is not None
+                                   and res.challenge_alt.matched) else None)
+        rc = max(self.profile.reenter_check, self.profile.second_delay)
+        if check_reenter and seen_challenge is not None \
+                and now - self._state_entered_at > rc:
+            self._reentered_count += 1
+            if self._reentered_count <= 3:
+                self._log(f"⚠ 等待第二段图超时，但仍看到开始图，疑似第一段点击被吞，"
+                          f"重新点击开始图(第{self._reentered_count}次)")
+                self.input.click(seen_challenge.center[0], seen_challenge.center[1],
+                                 clicks=self.profile.battle_clicks)
+            else:
+                self._log(f"⚠ 已重点开始图{self._reentered_count - 1}次仍未展开第二段，"
+                          f"疑似界面异常，保存现场")
+                self.debug.save_error(img, AutoBotError("反复重点开始图仍未展开第二段界面"))
+            self._state_entered_at = now
+            return
+
         self._maybe_scroll(now)
         self._find_timeout_common(img, now, "第二段图(进攻)")
 
@@ -422,7 +452,7 @@ class AutomationController:
         now = self._clock()
         if now - self._battle_started_at < self.profile.pre_battle_delay:
             return
-        # 检测:胜负 + (启用时)式神 + 开始图(主图与备选图平级,用于"没进战斗"判定)
+        # 检测:胜负 + (启用时)式神 + 开始图/第二段图(用于"没进战斗"判定)
         want_shikigami = (self.profile.shikigami_enabled
                           and self.profile.shikigami_img
                           and not self._shikigami_clicked)
@@ -434,6 +464,8 @@ class AutomationController:
             types.append(ScreenType.CHALLENGE)
             if self.profile.alt_enabled and self.profile.alt_battle_img:
                 types.append(ScreenType.CHALLENGE_ALT)
+            if self.profile.second_enabled and self.profile.second_img:
+                types.append(ScreenType.SECOND)
         res = self.detector.detect(img, self.profile, types)
         m = res.first(ScreenType.VICTORY, ScreenType.FAILURE)
         if m is not None:
@@ -462,26 +494,41 @@ class AutomationController:
             self._shikigami_clicked = True
             self._log(f"   已点击式神 ({pos[0]}, {pos[1]})")
             return
-        # "没进战斗"自愈:等了 reenter_check 秒仍能看到开始图(主图或备选图,
-        # 两种样式平级) → 点击没生效,重点当前可见的那张
+        # "没进战斗"自愈:等了 reenter_check 秒仍能看到第二段图或开始图
+        # (a) 若为两段战斗且仍看到第二段图(如进攻) → 进攻点击未生效,重点第二段图
+        # (b) 若仍看到开始图(主图或备选图) → 开始图点击未生效,重点开始图
         rc = self.profile.reenter_check
-        seen = res.challenge if (res.challenge is not None
-                                 and res.challenge.matched) else \
+        seen_second = (res.second if (self.profile.second_enabled
+                                      and res.second is not None
+                                      and res.second.matched) else None)
+        seen_challenge = res.challenge if (res.challenge is not None
+                                           and res.challenge.matched) else \
             (res.challenge_alt if (res.challenge_alt is not None
                                    and res.challenge_alt.matched) else None)
-        if check_reenter and seen is not None \
+        if check_reenter and (seen_second is not None or seen_challenge is not None) \
                 and now - self._battle_started_at > rc:
             self._reentered_count += 1
-            if self._reentered_count <= 3:
-                self._log(f"⚠ 进战斗{rc:.0f}秒后仍看到开始图，疑似点击未生效，"
-                          f"重新点击开始图(第{self._reentered_count}次)")
-                self.input.click(seen.center[0], seen.center[1],
-                                 clicks=self.profile.battle_clicks)
+            if seen_second is not None:
+                if self._reentered_count <= 3:
+                    self._log(f"⚠ 进战斗{rc:.0f}秒后仍看到第二段图(进攻)，疑似点击未生效，"
+                              f"重新点击第二段图(第{self._reentered_count}次)")
+                    self.input.click(seen_second.center[0], seen_second.center[1], clicks=1)
+                else:
+                    self._log(f"⚠ 已重点第二段图{self._reentered_count - 1}次仍未进入战斗，"
+                              f"疑似界面异常，保存现场")
+                    self.debug.save_error(
+                        img, AutoBotError("反复重点第二段图仍未进战斗"))
             else:
-                self._log(f"⚠ 已重点开始图{self._reentered_count - 1}次仍未进入，"
-                          f"疑似界面异常，保存现场")
-                self.debug.save_error(
-                    img, AutoBotError("反复重点开始图仍未进战斗"))
+                if self._reentered_count <= 3:
+                    self._log(f"⚠ 进战斗{rc:.0f}秒后仍看到开始图，疑似点击未生效，"
+                              f"重新点击开始图(第{self._reentered_count}次)")
+                    self.input.click(seen_challenge.center[0], seen_challenge.center[1],
+                                     clicks=self.profile.battle_clicks)
+                else:
+                    self._log(f"⚠ 已重点开始图{self._reentered_count - 1}次仍未进入，"
+                              f"疑似界面异常，保存现场")
+                    self.debug.save_error(
+                        img, AutoBotError("反复重点开始图仍未进战斗"))
             self._battle_started_at = now  # 重新计时,给下一轮自愈机会
             return
         bt = self.profile.battle_timeout
