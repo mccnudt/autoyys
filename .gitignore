@@ -1,0 +1,67 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller / Packaging
+*.manifest
+*.spec.bak
+build/
+dist/
+*.exe
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Runtime & Logs
+logs/
+*.log
+
+# Local Runtime States
+gui_state.json
+window_remarks.json
+profiles/last_profile.json
+
+# User custom screenshots (Keep built-in preset icon templates)
+templates/gen_*.png
+templates/999体_*.png
+templates/*_battle.png
+templates/*_confirm.png
+templates/*_victory.png
+templates/*_defeat.png
+templates/*_entry*.png
+templates/*_second*.png
+templates/*_shikigami*.png
+templates/*_end*.png
+
+# Ensure built-in preset templates are tracked
+!templates/failure.png
+!templates/final.png
+!templates/hun11tz.png
+!templates/jiesuan.png
+!templates/jingongjiejie.png
+!templates/kun28.png
+!templates/pata.png
+!templates/tansuo.png
+!templates/tansuojieshu.png
+!templates/tansuokaishi.png
+!templates/tupo1.png
+!templates/tz.png
+!templates/victory.png
+
+# User custom profiles (Keep default preset profiles)
+profiles/*.json
+!profiles/魂11通用.json
+!profiles/御灵通用.json
+!profiles/业原火通用.json
+!profiles/活动通用.json
+!profiles/结界突破通用.json
+!profiles/困难28通用.json
