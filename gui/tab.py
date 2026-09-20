@@ -116,6 +116,10 @@ class BotTab(ttk.Frame):
         ("alert_img", "alert_img", "img"),
         ("alert_threshold", "alert_conf", "float"),
         ("alert_action", "alert_action", "str"),
+        ("exclude_enabled", "exclude_enabled", "bool"),
+        ("exclude_img", "exclude_img", "img"),
+        ("exclude_threshold", "exclude_conf", "float"),
+        ("exclude_distance", "exclude_dist", "float"),
     ]
     # var 默认值覆盖:profile 默认 None/空时,UI 仍给合理初始值
     _VAR_DEFAULT_OVERRIDES = {
@@ -424,6 +428,50 @@ class BotTab(ttk.Frame):
                                  width=6, state="readonly", font=("", 9))
         alert_act["values"] = ["click", "stop"]
         alert_act.pack(side=tk.LEFT, padx=(4, 0))
+
+        # 排除图片过滤行(如结界失败标记)
+        excrow = ttk.Frame(lfc)
+        excrow.pack(fill=tk.X, pady=(4, 0))
+        ttk.Checkbutton(excrow, text="排除过滤图片:",
+                        variable=self._vars["exclude_enabled"]).pack(side=tk.LEFT)
+        ttk.Entry(excrow, textvariable=self._vars["exclude_img"], width=18,
+                  state="readonly", font=("", 8)).pack(side=tk.LEFT, padx=(4, 4))
+
+        def _browse_exclude():
+            from tkinter import filedialog
+            path = filedialog.askopenfilename(
+                title="选择排除标记图片(如结界突破失败标记)",
+                filetypes=[("图片文件", "*.png *.jpg *.jpeg *.bmp"),
+                           ("所有文件", "*.*")])
+            if path:
+                self._vars["exclude_img"].set(path)
+                widgets.update_img_preview(path, self._previews["exclude"])
+
+        def _crop_exclude():
+            path = self._crop_to("exclude")
+            if path:
+                self._vars["exclude_img"].set(path)
+                widgets.update_img_preview(path, self._previews["exclude"])
+
+        ttk.Button(excrow, text="浏览", command=_browse_exclude, width=6
+                   ).pack(side=tk.LEFT)
+        ttk.Button(excrow, text="截图", command=_crop_exclude, width=6
+                   ).pack(side=tk.LEFT, padx=(5, 0))
+        ttk.Label(excrow, text="置信度:", font=("", 8)).pack(
+            side=tk.LEFT, padx=(10, 2))
+        ttk.Entry(excrow, textvariable=self._vars["exclude_conf"], width=4,
+                  font=("", 9)).pack(side=tk.LEFT)
+        pf_exclude = tk.Frame(excrow, width=80, height=50, bg="#e8e8e8",
+                              relief=tk.SUNKEN, bd=1)
+        pf_exclude.pack(side=tk.LEFT, padx=(8, 10))
+        pf_exclude.pack_propagate(False)
+        self._previews["exclude"] = tk.Label(
+            pf_exclude, bg="#e8e8e8", fg="#888888", text="无", font=("", 8))
+        self._previews["exclude"].pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(excrow, text="关联间距(px):", font=("", 9)).pack(side=tk.LEFT)
+        ttk.Entry(excrow, textvariable=self._vars["exclude_dist"], width=5,
+                  font=("", 9)).pack(side=tk.LEFT, padx=(4, 0))
 
         prow = ttk.Frame(lfc)
         prow.pack(fill=tk.X, pady=(6, 0))

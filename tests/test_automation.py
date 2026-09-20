@@ -780,3 +780,43 @@ class TestAdaptiveInterval:
         assert c.fsm.state == GameState.WAIT_BATTLE
         # 战斗前置等待期自适应降频
         assert c.suggested_interval() >= 1.2
+
+
+class TestExcludeFilter:
+    def test_find_challenge_exclude_filter_logs_when_targets_skipped(self, profile):
+        """当画面中存在排除标记并跳过了部分目标时，自动化控制器输出明确的跳过日志。"""
+        from core.models import MatchResult, ScreenResult, ScreenType
+
+        class ExcludeMockDetector:
+            def detect(self, image, prof, types, strategy="best"):
+                res = ScreenResult()
+                res.challenge = MatchResult(ScreenType.CHALLENGE, (500, 300), 0.95)
+                res.excluded_count = 2  # 模拟跳过了2个已失败目标
+                return res
+
+        profile.exclude_enabled = True
+        profile.exclude_img = "fail.png"
+        c, events = make_controller(profile, ExcludeMockDetector())
+        c.run_once()  # FIND_CHALLENGE -> CLICK_CHALLENGE
+        assert c.fsm.state == GameState.CLICK_CHALLENGE
+        assert any("已根据排除标记跳过 2 个已失败目标" in m for m in msgs(events))
+
+    def test_find_challenge_all_excluded_logs_once(self, profile):
+        """当所有目标均被排除标记过滤时，记录全部跳过日志且不推进状态。"""
+        from core.models import ScreenResult
+
+        class AllExcludedMockDetector:
+            def detect(self, image, prof, types, strategy="best"):
+                res = ScreenResult()
+                res.excluded_count = 3  # 所有候选均被排除
+                return res
+
+        profile.exclude_enabled = True
+        profile.exclude_img = "fail.png"
+        c, events = make_controller(profile, AllExcludedMockDetector())
+        c.run_once()
+        c.run_once()
+        assert c.fsm.state == GameState.FIND_CHALLENGE
+        skip_logs = [m for m in msgs(events) if "均包含排除标记，已全部跳过" in m]
+        assert len(skip_logs) == 1  # 节流只记录一次
+

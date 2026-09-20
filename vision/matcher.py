@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -135,3 +135,47 @@ class TemplateMatcher:
                 best_match = MatchResult(st, None, float(max_val))
 
         return best_match
+
+    def find_all(self, image: np.ndarray, template_name: str,
+                 threshold: float,
+                 scales: Optional[Sequence[float]] = None) -> List[MatchResult]:
+        """在 image 中查找所有匹配 template_name 的目标（NMS 去重后返回）。"""
+        st = ScreenType.NONE
+        tpl = self.registry.load(template_name)
+        if image is None or image.size == 0 or tpl is None:
+            return []
+
+        search_scales = [1.0] if not scales else ([1.0] + [s for s in scales if s != 1.0])
+        results: List[MatchResult] = []
+
+        ih, iw = image.shape[:2]
+        orig_th, orig_tw = tpl.shape[:2]
+
+        for s in search_scales:
+            if s == 1.0:
+                cur_tpl = tpl
+                tw, th = orig_tw, orig_th
+            else:
+                tw, th = int(orig_tw * s), int(orig_th * s)
+                if tw < 5 or th < 5 or tw > iw or th > ih:
+                    continue
+                cur_tpl = cv2.resize(tpl, (tw, th), interpolation=cv2.INTER_LINEAR)
+
+            if tw > iw or th > ih:
+                continue
+
+            res = cv2.matchTemplate(image, cur_tpl, cv2.TM_CCOEFF_NORMED)
+            ys, xs = np.where(res >= threshold)
+            if len(xs) == 0:
+                continue
+
+            for x, y in sorted(zip(xs.tolist(), ys.tolist()),
+                               key=lambda p: res[p[1], p[0]], reverse=True):
+                score = float(res[y, x])
+                cx, cy = x + tw // 2, y + th // 2
+                if not any(abs(cx - r.center[0]) < tw // 2 and abs(cy - r.center[1]) < th // 2
+                           for r in results if r.center):
+                    results.append(MatchResult(st, (cx, cy), score))
+
+        return results
+

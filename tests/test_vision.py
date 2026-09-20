@@ -120,6 +120,24 @@ class TestTemplateMatcher:
             assert abs(m2.center[0] - (40 + 12)) <= 2
             assert abs(m2.center[1] - (30 + 12)) <= 2
 
+    def test_find_all_multiple_targets(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.png")
+            tpl = _write_tpl(p, 20)
+            screen = make_screen(300, 200)
+            # 放置 3 个相同目标
+            screen[30:50, 40:60] = tpl
+            screen[30:50, 120:140] = tpl
+            screen[100:120, 40:60] = tpl
+
+            matcher = TemplateMatcher()
+            matches = matcher.find_all(screen, p, threshold=0.8)
+            assert len(matches) == 3
+            centers = {m.center for m in matches}
+            assert (50, 40) in centers
+            assert (130, 40) in centers
+            assert (50, 110) in centers
+
 
 class TestScreenDetector:
 
@@ -149,6 +167,66 @@ class TestScreenDetector:
         assert res.first(ScreenType.FAILURE, ScreenType.VICTORY).center == (2, 2)
         assert res.first(ScreenType.VICTORY, ScreenType.FAILURE).center == (1, 1)
         assert res.first(ScreenType.SETTLEMENT) is None
+
+    def test_exclude_filter_skips_failed_challenges(self):
+        """结界突破排除测试: 顶部目标打上失败标记时，多目标策略自动跳过该目标选择下方可用目标。"""
+        with tempfile.TemporaryDirectory() as d:
+            p_battle = os.path.join(d, "battle.png")
+            p_exclude = os.path.join(d, "fail_mark.png")
+            tpl_battle = _write_tpl(p_battle, 20)
+
+            # 排除标记(不同图案)
+            ex_img = np.full((15, 15, 3), 50, dtype=np.uint8)
+            cv2.circle(ex_img, (7, 7), 5, (0, 0, 255), -1)
+            cv2.imwrite(p_exclude, ex_img)
+
+            screen = make_screen(300, 300)
+            # 两个挑战目标: 上方 (60, 40) 和 下方 (60, 160)
+            screen[40:60, 60:80] = tpl_battle
+            screen[160:180, 60:80] = tpl_battle
+
+            # 在上方挑战目标右侧 (90, 40) 贴排除标记(间距 ~27px，不破坏模板像素)
+            screen[40:55, 90:105] = ex_img
+
+            prof = BattleProfile(
+                battle_img=p_battle,
+                exclude_enabled=True,
+                exclude_img=p_exclude,
+                exclude_distance=40.0,
+                exclude_threshold=0.8,
+                match_strategy="最上面"
+            )
+            det = ScreenDetector()
+            res = det.detect(screen, prof, [ScreenType.CHALLENGE], strategy=prof.match_strategy)
+            assert res.challenge is not None and res.challenge.matched
+            # 上方目标被排除，选中的应是下方目标 (60+10, 160+10) = (70, 170)
+            assert res.challenge.center == (70, 170)
+            assert res.excluded_count == 1
+
+    def test_exclude_filter_all_excluded(self):
+        """当所有挑战目标均被打上排除标记时，全部跳过且 challenge 为 None。"""
+        with tempfile.TemporaryDirectory() as d:
+            p_battle = os.path.join(d, "battle.png")
+            p_exclude = os.path.join(d, "fail_mark.png")
+            tpl_battle = _write_tpl(p_battle, 20)
+            ex_img = np.full((15, 15, 3), 50, dtype=np.uint8)
+            cv2.circle(ex_img, (7, 7), 5, (0, 0, 255), -1)
+            cv2.imwrite(p_exclude, ex_img)
+
+            screen = make_screen(200, 200)
+            screen[40:60, 60:80] = tpl_battle
+            screen[40:55, 85:100] = ex_img  # 距目标中心 (70, 50) 约 22px
+
+            prof = BattleProfile(
+                battle_img=p_battle,
+                exclude_enabled=True,
+                exclude_img=p_exclude,
+                exclude_distance=30.0,
+            )
+            det = ScreenDetector()
+            res = det.detect(screen, prof, [ScreenType.CHALLENGE])
+            assert res.challenge is None or not res.challenge.matched
+            assert res.excluded_count == 1
 
 
 class TestUnicodePath:

@@ -76,6 +76,7 @@ class AutomationController:
         self._end_clicked_at = 0.0
         self._result_seen = False   # 胜负图连续两拍确认(防动画假命中)
         self._reentered_count = 0   # 本场战斗"重点开始图"次数(防无限自愈)
+        self._exclude_all_logged = False  # 候选全部排除时的日志节流标记
 
     # ---- 生命周期 ----
 
@@ -115,6 +116,7 @@ class AutomationController:
         self._result_seen = False
         self._reentered_count = 0
         self._minimized_logged = False
+        self._exclude_all_logged = False
 
     @property
     def finished(self) -> bool:
@@ -345,12 +347,19 @@ class AutomationController:
             return
         m = res.first(ScreenType.CHALLENGE, ScreenType.CHALLENGE_ALT)
         if m is not None:
+            if getattr(res, "excluded_count", 0) > 0:
+                self._log(f"🛡 已根据排除标记跳过 {res.excluded_count} 个已失败目标")
+            self._exclude_all_logged = False
             nxt = self.fsm.update(detected=True, has_result=False,
                                    timed_out=False)
             if nxt != self.fsm.state:
                 self._click_target = m.center
                 self._goto(nxt)
             return
+        if getattr(res, "excluded_count", 0) > 0:
+            if not getattr(self, "_exclude_all_logged", False):
+                self._log(f"🛡 当前可见的 {res.excluded_count} 个候选目标均包含排除标记，已全部跳过")
+                self._exclude_all_logged = True
         if res.end is not None and res.end.matched:
             self._click_target = res.end.center
             self._goto(GameState.CLICK_END)

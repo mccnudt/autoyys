@@ -64,6 +64,29 @@ class TestProfileManager:
         p = pm.load("带新字段")
         assert p is not None and p.battle_img == "b.png"
 
+    def test_exclude_profile_roundtrip_and_validation(self, tmp_path):
+        pm = ProfileManager(str(tmp_path))
+        p = BattleProfile(
+            name="结界突破配置",
+            battle_img="battle.png",
+            exclude_enabled=True,
+            exclude_img="fail_mark.png",
+            exclude_threshold=0.85,
+            exclude_distance=150.0
+        )
+        pm.save(p)
+        loaded = pm.load("结界突破配置")
+        assert loaded is not None
+        assert loaded.exclude_enabled is True
+        assert loaded.exclude_img == "fail_mark.png"
+        assert loaded.exclude_threshold == 0.85
+        assert loaded.exclude_distance == 150.0
+
+        # 校验: 启用排除图但排除图文件不存在时报错
+        errs, _ = loaded.validate(image_exists=lambda p: p == "battle.png")
+        assert any("「排除图片过滤」图片不存在" in e for e in errs)
+
+
 
 class TestWorker:
 
