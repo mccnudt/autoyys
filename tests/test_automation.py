@@ -942,5 +942,21 @@ class TestTeamMemberFlow:
         assert c.fsm.state == GameState.CLICK_END
         assert c._click_target == (400, 300)
 
+    def test_settlement_detected_in_wait_battle_counts_as_victory(self, profile):
+        """若战斗结束极快或跳过胜负图直接出现结算，自动判定为胜利并进入结算流程。"""
+        profile.confirm_img = "settlement.png"
+        profile.pre_battle_delay = 0.0
+        profile.max_runs = 1
+        # challenge -> 进战 -> 跳过胜负，直接出现 settlement
+        script = [["challenge"], ["settlement"], []]
+        c, events = make_controller(profile, FakeDetector(script))
+        # 前进至 WAIT_BATTLE
+        c.run_once()  # FIND_CHALLENGE -> CLICK_CHALLENGE
+        c.run_once()  # CLICK_CHALLENGE -> WAIT_BATTLE
+        assert c.fsm.state == GameState.WAIT_BATTLE
 
-
+        # 在 WAIT_BATTLE 画面中检测到 settlement
+        c.run_once()
+        assert any("自动判定为胜利" in m for m in msgs(events))
+        assert c.stats.snapshot().success == 1
+        assert c.fsm.state == GameState.SETTLEMENT

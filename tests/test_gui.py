@@ -4,7 +4,7 @@ import pytest
 from gui.app import App
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def gui_app():
     root = tk.Tk()
     root.withdraw()  # 无头隐藏窗口，避免弹出干扰

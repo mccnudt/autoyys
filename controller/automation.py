@@ -459,9 +459,6 @@ class AutomationController:
         # 1. 战斗已结束/结算中（直达结算）
         m = res.first(ScreenType.VICTORY, ScreenType.FAILURE)
         if m is not None:
-            if not self._result_seen:
-                self._result_seen = True
-                return
             if m.screen_type == ScreenType.VICTORY:
                 self.stats.increment_run()
                 self.stats.increment_success()
@@ -481,7 +478,10 @@ class AutomationController:
         self._result_seen = False
 
         if res.settlement and res.settlement.matched:
-            self._log("🏁 检测到结算画面，进入结算")
+            self.stats.increment_run()
+            self.stats.increment_success()
+            self._log("🏁 检测到结算画面（自动判定为胜利），进入结算")
+            self._result_pos = res.settlement.center
             self._settlement_at = now
             self._result_clicked = False
             self._confirm_clicked = False
@@ -683,11 +683,13 @@ class AutomationController:
         now = self._clock()
         if now - self._battle_started_at < self.profile.pre_battle_delay:
             return
-        # 检测:胜负 + (启用时)式神 + 开始图/第二段图(用于"没进战斗"判定) + (启用时)异常弹窗
+        # 检测:胜负 + 结算(兜底自动判定为胜利) + (启用时)式神 + 开始图/第二段图(用于"没进战斗"判定) + (启用时)异常弹窗
         want_shikigami = (self.profile.shikigami_enabled
                           and self.profile.shikigami_img
                           and not self._shikigami_clicked)
         types = [ScreenType.VICTORY, ScreenType.FAILURE]
+        if self.profile.confirm_img:
+            types.append(ScreenType.SETTLEMENT)
         if want_shikigami:
             types.append(ScreenType.SHIKIGAMI)
         check_reenter = self.profile.reenter_check > 0
@@ -702,10 +704,6 @@ class AutomationController:
         res = self.detector.detect(img, self.profile, types)
         m = res.first(ScreenType.VICTORY, ScreenType.FAILURE)
         if m is not None:
-            # 两拍确认:胜负图连续两拍都命中才处理,防动画中截获假命中
-            if not self._result_seen:
-                self._result_seen = True
-                return
             if m.screen_type == ScreenType.VICTORY:
                 self.stats.increment_success()
                 self._log("   ⚔ 胜利")
@@ -719,14 +717,30 @@ class AutomationController:
             self._result_seen = False
             self._goto(GameState.SETTLEMENT)
             return
-        self._result_seen = False
-        if want_shikigami and res.shikigami is not None \
-                and res.shikigami.matched:
-            pos = res.shikigami.center
-            self.input.click(pos[0], pos[1], clicks=1)
-            self._shikigami_clicked = True
-            self._log(f"   已点击式神 ({pos[0]}, {pos[1]})")
+
+        # 兜底：若战斗结束太快或游戏跳过胜负图直接进入结算画面，自动视为本次战斗胜利
+        if res.settlement is not None and res.settlement.matched:
+            self.stats.increment_success()
+            self._log("   🏁 检测到结算画面（自动判定为胜利）")
+            self._result_pos = res.settlement.center
+            self._settlement_at = now
+            self._result_clicked = False
+            self._confirm_clicked = False
+            self._result_seen = False
+            self._goto(GameState.SETTLEMENT)
             return
+
+        self._result_seen = False
+        if want_shikigami:
+            if res.shikigami is not None and res.shikigami.matched:
+                pos = res.shikigami.center
+                self.input.click(pos[0], pos[1], clicks=1)
+                self._shikigami_clicked = True
+                self._log(f"   已点击式神 ({pos[0]}, {pos[1]})")
+                return
+            elif now - self._battle_started_at > 4.0:
+                self._shikigami_clicked = True
+                self._log("   ℹ 进战超4秒未匹配到式神，平滑让出专注于监听胜负")
         if self._handle_alert_if_present(img, res):
             return
         # "没进战斗"自愈:等了 reenter_check 秒仍能看到第二段图或开始图

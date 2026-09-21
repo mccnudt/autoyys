@@ -144,6 +144,7 @@ class BotTab(ttk.Frame):
         ("chest_img", "chest_img", "img"),
         ("chest_threshold", "chest_conf", "float"),
         ("chest_max_clicks", "chest_max_clicks", "int"),
+        ("pre_battle_delay", "pre_battle_delay", "float"),
     ]
     # var 默认值覆盖:profile 默认 None/空时,UI 仍给合理初始值
     _VAR_DEFAULT_OVERRIDES = {
@@ -151,6 +152,7 @@ class BotTab(ttk.Frame):
         "team_role": "单人",
         "boss_priority": True,
         "chest_max_clicks": 3,
+        "pre_battle_delay": 1.2,
         "timeout": (800, 450),  # 超时点击坐标的 UI 默认
     }
 
@@ -301,31 +303,47 @@ class BotTab(ttk.Frame):
         ttk.Button(trow, text="删除", command=self._delete_profile, width=6
                    ).pack(side=tk.LEFT)
 
-        # ===== 运行模式 =====
-        mf = ttk.LabelFrame(main, text="运行模式", padding="8")
+        # ===== 运行模式与窗口 =====
+        mf = ttk.LabelFrame(main, text="运行模式与窗口", padding="8")
         mf.pack(fill=tk.X, pady=(0, 8))
         mfc = self._make_collapsible(mf, default_open=True)
-        ttk.Label(mfc, text="模式:", font=("", 9)).pack(side=tk.LEFT)
+
+        # 第1行：模式 + 窗口关键词 + 刷新窗口
+        row1 = ttk.Frame(mfc)
+        row1.pack(fill=tk.X, pady=(0, 6))
+        ttk.Label(row1, text="模式:", font=("", 9)).pack(side=tk.LEFT)
         self.run_mode_combo = ttk.Combobox(
-            mfc, textvariable=self._vars["run_mode"], width=6,
+            row1, textvariable=self._vars["run_mode"], width=6,
             state="readonly", values=["后台", "前台"])
         self.run_mode_combo.pack(side=tk.LEFT, padx=(4, 16))
         self.run_mode_combo.bind("<<ComboboxSelected>>", self._on_run_mode_changed)
 
-        # 窗口行
+        ttk.Label(row1, text="窗口关键词:", font=("", 9)).pack(side=tk.LEFT)
+        self.keyword_entry = ttk.Entry(
+            row1, textvariable=self._vars["window_keyword"], width=10, font=("", 9))
+        self.keyword_entry.pack(side=tk.LEFT, padx=(4, 6))
+        self.keyword_entry.bind("<Return>", lambda e: self.refresh_windows())
+        ttk.Button(row1, text="刷新窗口", command=self.refresh_windows, width=8
+                   ).pack(side=tk.LEFT, padx=(0, 6))
+
+        # 第2行：游戏窗口 + 测试 + 窗口备注标记
         wrow = ttk.Frame(mfc)
         wrow.pack(fill=tk.X)
-        ttk.Label(wrow, text="窗口:", font=("", 9)).pack(side=tk.LEFT)
+        ttk.Label(wrow, text="游戏窗口:", font=("", 9)).pack(side=tk.LEFT)
         self.window_combo = ttk.Combobox(
             wrow, textvariable=self._vars["window"], state="readonly", width=22)
         self.window_combo.pack(side=tk.LEFT, padx=4)
         self.window_combo.bind("<<ComboboxSelected>>",
                                lambda e: self._on_window_selected())
-        ttk.Button(wrow, text="刷新窗口", command=self.refresh_windows, width=8
-                   ).pack(side=tk.LEFT, padx=2)
         ttk.Button(wrow, text="测试", command=self._test_backend, width=5
-                   ).pack(side=tk.LEFT, padx=2)
-        self.btn_remark = ttk.Button(wrow, text="备注",
+                   ).pack(side=tk.LEFT, padx=(0, 16))
+
+        ttk.Label(wrow, text="窗口备注:", font=("", 9)).pack(side=tk.LEFT)
+        self.remark_entry = ttk.Entry(
+            wrow, textvariable=self._vars["window_remark"], width=8, font=("", 9))
+        self.remark_entry.pack(side=tk.LEFT, padx=(4, 4))
+        self.remark_entry.bind("<Return>", lambda e: self.apply_remark())
+        self.btn_remark = ttk.Button(wrow, text="标记",
                                      command=self.apply_remark, width=5)
         self.btn_remark.pack(side=tk.LEFT, padx=2)
 
@@ -415,9 +433,9 @@ class BotTab(ttk.Frame):
                   font=("", 9)).pack(side=tk.LEFT)
 
         self._previews["alt_battle"], alt_row = self._checkbox_image_row(
-            adv_c, "备选开始图(任一命中即点):", self._vars["alt_enabled"],
+            adv_c, "备选/首领Boss图:", self._vars["alt_enabled"],
             self._vars["alt_battle_img"], self._vars["alt_battle_conf"], "alt_battle")
-        ttk.Checkbutton(alt_row, text="首领优先",
+        ttk.Checkbutton(alt_row, text="同屏优先挑战首领",
                         variable=self._vars["boss_priority"]).pack(side=tk.LEFT, padx=(6, 0))
 
         self._previews["second"], s2row = self._checkbox_image_row(
@@ -427,9 +445,12 @@ class BotTab(ttk.Frame):
         ttk.Entry(s2row, textvariable=self._vars["second_delay"], width=4,
                   font=("", 9)).pack(side=tk.LEFT)
 
-        self._previews["shikigami"], _ = self._checkbox_image_row(
+        self._previews["shikigami"], shiki_row = self._checkbox_image_row(
             adv_c, "进入战斗点击式神(绿标):", self._vars["shikigami_enabled"],
             self._vars["shikigami_img"], self._vars["shikigami_conf"], "shikigami")
+        ttk.Label(shiki_row, text="进战等待(秒):", font=("", 9)).pack(side=tk.LEFT, padx=(8, 2))
+        ttk.Entry(shiki_row, textvariable=self._vars["pre_battle_delay"], width=4,
+                  font=("", 9)).pack(side=tk.LEFT)
 
         # ===== 3.【安全】异常拦截与自愈闭环 =====
         heal_lf = ttk.LabelFrame(main, text="【安全】异常拦截与自愈闭环", padding="8")

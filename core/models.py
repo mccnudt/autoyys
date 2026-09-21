@@ -140,7 +140,7 @@ class BattleProfile:
     exclude_distance: float = 120.0  # 关联距离(像素)，在此距离内的开始图将被排除跳过
     max_runs: int = 100
     battle_timeout: float = 60.0   # WAIT_BATTLE 最长等待(秒),0=不限,一直等胜负图
-    pre_battle_delay: float = 5.0  # 进入战斗后的动画前置等待（秒）
+    pre_battle_delay: float = 1.2  # 进入战斗后的动画前置等待（秒，默认1.2秒极速进入检测）
     timeout_click: Optional[Tuple[int, int]] = None  # 超时点击的屏幕坐标
     battle_clicks: int = 3         # 开始图点击次数(1-3;点一次开界面的场景设1)
     match_strategy: str = "最高分"  # 多目标策略: 最高分 | 最上面 | 最左边

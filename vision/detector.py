@@ -18,11 +18,10 @@ from vision.matcher import TemplateMatcher
 DEFAULT_ROIS = {
     ScreenType.CHALLENGE: (0.55, 0.55, 1.0, 1.0),      # 挑战按钮通常在右下角
     ScreenType.CHALLENGE_ALT: (0.55, 0.55, 1.0, 1.0),  # 备选挑战按钮
-    ScreenType.VICTORY: (0.20, 0.05, 0.80, 0.60),      # 胜利标题居中偏上
-    ScreenType.FAILURE: (0.20, 0.05, 0.80, 0.60),      # 失败标题居中偏上
-    ScreenType.SETTLEMENT: (0.10, 0.35, 0.90, 1.0),    # 结算与达摩通常在下半区
     ScreenType.READY: (0.65, 0.65, 1.0, 1.0),          # 准备按钮通常在右下角
     ScreenType.CHEST: (0.10, 0.20, 0.90, 0.85),        # 通关小纸人/宝箱通常在道路中部区域
+    # 注意：VICTORY、FAILURE、SETTLEMENT 胜负结算图由于不同副本位置和动画光效跨度大，
+    # 保持 100% 全图完整扫描，杜绝任何 ROI 边界裁剪或误切
 }
 
 

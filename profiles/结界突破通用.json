@@ -46,7 +46,7 @@
   "exclude_distance": 120.0,
   "max_runs": 30,
   "battle_timeout": 0,
-  "pre_battle_delay": 5.0,
+  "pre_battle_delay": 1.2,
   "timeout_click": null,
   "battle_clicks": 1,
   "match_strategy": "最上面",

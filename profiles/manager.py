@@ -62,7 +62,8 @@ PRESET_PROFILES: Dict[str, dict] = {
         "error_action": "continue"},
     "困难28通用": {
         "battle_img": "templates/tansuo.png",
-        "alt_enabled": False, "alt_battle_img": "", "boss_priority": True,
+        "alt_enabled": True, "alt_battle_img": "templates/gen_alt_battle.png",
+        "boss_priority": True,
         "entry_enabled": True, "entry_img": "templates/kun28.png",
         "entry_threshold": 0.7, "entry_delay": 3,
         "entry2_enabled": True, "entry2_img": "templates/tansuokaishi.png",
