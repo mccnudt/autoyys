@@ -5,7 +5,6 @@ import json
 import os
 import tkinter as tk
 from tkinter import ttk
-from typing import List
 
 from .tab import BotTab
 
@@ -48,7 +47,7 @@ class App:
         self.notebook = ttk.Notebook(root)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
 
-        self.tabs: List[BotTab] = []
+        self.tabs: list[BotTab] = []
         self.new_tab()
         root.protocol("WM_DELETE_WINDOW", self.on_close)
 
@@ -89,6 +88,9 @@ class App:
     def close_tab(self, tab: BotTab) -> None:
         if tab not in self.tabs:
             return
+        if tab.worker and tab.worker.is_alive:
+            tab.worker.stop()
+            tab.worker.join(timeout=0.3)
         self.tabs.remove(tab)
         self.notebook.forget(tab)
         try:
@@ -99,8 +101,12 @@ class App:
             self.new_tab()  # 至少保留一页
 
     def on_close(self) -> None:
-        for tab in self.tabs:
-            if tab.worker and tab.worker.is_alive:
-                tab.worker.stop()
+        """优雅退出：通知所有标签页后台 Worker 停止并等待安全交还资源，再销毁窗口。"""
+        running_workers = [tab.worker for tab in self.tabs
+                           if tab.worker and tab.worker.is_alive]
+        for w in running_workers:
+            w.stop()
+        for w in running_workers:
+            w.join(timeout=0.5)
         self._save_window_state()
         self.root.destroy()

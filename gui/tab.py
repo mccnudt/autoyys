@@ -18,6 +18,12 @@ from window.manager import WindowManager
 from worker.worker import AutomationWorker
 
 from . import widgets
+from .styles import (
+    COLOR_STATUS_ERROR,
+    COLOR_STATUS_IDLE,
+    COLOR_STATUS_RUNNING,
+    COLOR_STATUS_WAITING,
+)
 from .widgets import APP_ROOT, resolve_image
 
 STATE_TEXT = {
@@ -1126,13 +1132,13 @@ class BotTab(ttk.Frame):
             self.log(data["message"])
         elif kind == "state":
             st_val = data["state"].value
-            color = "#0a7d18"
+            color = COLOR_STATUS_RUNNING
             if st_val in ("idle", "stopped"):
-                color = "gray"
+                color = COLOR_STATUS_IDLE
             elif st_val == "error":
-                color = "red"
+                color = COLOR_STATUS_ERROR
             elif st_val == "wait_team":
-                color = "#d97706"
+                color = COLOR_STATUS_WAITING
             self.state_label.config(
                 text=STATE_TEXT.get(st_val, st_val),
                 foreground=color)
