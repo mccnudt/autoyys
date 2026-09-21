@@ -63,6 +63,7 @@ class BotTab(ttk.Frame):
         self._paused = False
         self._last_stats = None
         self._max_runs = 0
+        self._previews = {}
 
         self._build_vars()
         self._build_ui()
@@ -249,6 +250,8 @@ class BotTab(ttk.Frame):
                 v[key].set(val)
         for key, label in self._previews.items():
             widgets.update_img_preview(v[f"{key}_img"].get(), label)
+        if hasattr(self, "role_tip_lbl"):
+            self._on_team_role_changed()
 
     # ---------- UI ----------
 
@@ -323,7 +326,7 @@ class BotTab(ttk.Frame):
         ttk.Button(wrow, text="测试", command=self._test_backend, width=5
                    ).pack(side=tk.LEFT, padx=2)
         self.btn_remark = ttk.Button(wrow, text="备注",
-                                     command=self._set_window_remark, width=5)
+                                     command=self.apply_remark, width=5)
         self.btn_remark.pack(side=tk.LEFT, padx=2)
 
         # ===== 战斗配置 (4大模块化折叠卡片) =====
@@ -346,6 +349,7 @@ class BotTab(ttk.Frame):
         team_role_combo.bind("<<ComboboxSelected>>", self._on_team_role_changed)
         self.role_tip_lbl = ttk.Label(role_row, text="", font=("", 8), foreground="gray")
         self.role_tip_lbl.pack(side=tk.LEFT)
+        self._on_team_role_changed()
 
         # 核心4图 (单人/队长必须配开始图；队员可不配开始图)
         pv_battle, brow = self._make_image_row(
@@ -775,6 +779,48 @@ class BotTab(ttk.Frame):
         frame._content = content
         return content
 
+    def _make_image_row(self, parent, label_text: str, path_var: tk.StringVar,
+                        conf_var: tk.StringVar, crop_key: str):
+        """标准图片行：标签 + 路径 + 浏览 + 截图 + 置信度 + 预览。返回 (preview, row)。"""
+        row = ttk.Frame(parent)
+        row.pack(fill=tk.X, pady=(0, 6))
+        lbl = ttk.Label(row, text=label_text, width=16, font=("", 9))
+        lbl.pack(side=tk.LEFT)
+        ttk.Entry(row, textvariable=path_var, font=("", 9)).pack(
+            side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 5))
+
+        def _browse():
+            from tkinter import filedialog
+            path = filedialog.askopenfilename(
+                title=f"选择{label_text.strip(':')}",
+                filetypes=[("图片文件", "*.png *.jpg *.jpeg *.bmp"),
+                           ("所有文件", "*.*")])
+            if path:
+                path_var.set(path)
+                widgets.update_img_preview(path, preview)
+
+        def _crop():
+            path = self._crop_to(crop_key)
+            if path:
+                path_var.set(path)
+                widgets.update_img_preview(path, preview)
+
+        ttk.Button(row, text="浏览", command=_browse, width=6).pack(side=tk.LEFT)
+        ttk.Button(row, text="截图", command=_crop, width=6).pack(
+            side=tk.LEFT, padx=(5, 0))
+        ttk.Label(row, text="置信度:", font=("", 8)).pack(
+            side=tk.LEFT, padx=(10, 2))
+        ttk.Entry(row, textvariable=conf_var, width=4, font=("", 9)).pack(
+            side=tk.LEFT)
+        pf = tk.Frame(row, width=80, height=50, bg="#e8e8e8",
+                      relief=tk.SUNKEN, bd=1)
+        pf.pack(side=tk.LEFT, padx=(8, 0))
+        pf.pack_propagate(False)
+        preview = tk.Label(pf, bg="#e8e8e8", fg="#888888", text="无",
+                           font=("", 8))
+        preview.pack(fill=tk.BOTH, expand=True)
+        return preview, row
+
     def _checkbox_image_row(self, parent, label, enabled_var, img_var,
                             conf_var, crop_key):
         """勾选式图片行:勾选启用 + 路径/浏览/截图/置信度/预览。返回预览 Label。"""
@@ -896,6 +942,30 @@ class BotTab(ttk.Frame):
             for i, x in enumerate(self._window_list)]
         self.log(f"窗口备注已{'设置' if remark else '清除'}: "
                  f"「{w.title}」→ {remark or '(无)'}")
+
+    _set_window_remark = apply_remark
+
+    def _on_run_mode_changed(self, _event=None) -> None:
+        mode = self._vars["run_mode"].get()
+        if mode == "前台":
+            self.log("💡 已切换为「前台」模式：将占用系统真实鼠标键盘，游戏窗口需保持置顶且不可遮挡")
+        else:
+            self.log("💡 已切换为「后台」模式：支持窗口最小化或遮挡挂机（请在下方选择并绑定游戏窗口）")
+
+    def _on_team_role_changed(self, _event=None) -> None:
+        role = self._vars["team_role"].get()
+        if role == "队员":
+            self.role_tip_lbl.config(
+                text="💡 队员模式：被动等待发车，自动结算，免填开始图",
+                foreground="#0066cc")
+        elif role == "队长":
+            self.role_tip_lbl.config(
+                text="💡 队长模式：主动点击挑战发车",
+                foreground="#666666")
+        else:
+            self.role_tip_lbl.config(
+                text="💡 单人模式：独立完成全流程",
+                foreground="#666666")
 
     def _on_window_selected(self, _event=None) -> None:
         idx = self.window_combo.current()
