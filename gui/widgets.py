@@ -47,7 +47,7 @@ def resolve_image(name: str) -> str:
 
 def crop_screen(root: tk.Misc) -> Optional[Tuple[int, int, int, int]]:
     """冻结当前屏幕供框选区域，返回 (x, y, w, h)；取消返回 None。"""
-    from PIL import Image, ImageTk
+    from PIL import ImageTk
 
     screen_img = pyautogui.screenshot()
     screen_w, screen_h = screen_img.size
@@ -101,7 +101,7 @@ def crop_screen(root: tk.Misc) -> Optional[Tuple[int, int, int, int]]:
 
 def pick_screen_coord(root: tk.Misc) -> Optional[Tuple[int, int]]:
     """全屏点击取坐标（截图为背景，避免黑屏），返回 (x, y)；Esc 取消。"""
-    from PIL import Image, ImageTk
+    from PIL import ImageTk
 
     screen_img = pyautogui.screenshot()
     bg = ImageTk.PhotoImage(screen_img)

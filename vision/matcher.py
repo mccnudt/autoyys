@@ -201,4 +201,3 @@ class TemplateMatcher:
                     results.append(MatchResult(st, (cx, cy), score))
 
         return results
-

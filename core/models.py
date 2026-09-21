@@ -129,8 +129,8 @@ class BattleProfile:
     alert_action: str = "click"    # click | stop
     exclude_enabled: bool = False  # 排除图片过滤(如结界失败标记)
     exclude_img: str = ""          # 排除图路径
-    exclude_threshold: float = 0.8 # 排除图匹配阈值
-    exclude_distance: float = 120.0 # 关联距离(像素)，在此距离内的开始图将被排除跳过
+    exclude_threshold: float = 0.8  # 排除图匹配阈值
+    exclude_distance: float = 120.0  # 关联距离(像素)，在此距离内的开始图将被排除跳过
     max_runs: int = 100
     battle_timeout: float = 60.0   # WAIT_BATTLE 最长等待(秒),0=不限,一直等胜负图
     pre_battle_delay: float = 5.0  # 进入战斗后的动画前置等待（秒）
@@ -143,11 +143,11 @@ class BattleProfile:
     find_timeout_click: Optional[Tuple[int, int]] = None  # 找图超时的"激活点击"屏幕坐标
     rest_every: str = "8-12"       # 每多少次休息一次（范围字符串）
     rest_seconds: str = "5-10"     # 休息时长（范围字符串）
-    error_action: str = "continue" # continue | stop
+    error_action: str = "continue"  # continue | stop
     run_mode: str = "后台"         # 前台 | 后台
     window_keyword: str = ""       # 后台窗口标题关键词
     detect_interval: float = 0.5   # 检测间隔（秒）
-    adaptive_interval: bool = True # 自适应心跳: 战斗期间自动放宽间隔降低 CPU 占用
+    adaptive_interval: bool = True  # 自适应心跳: 战斗期间自动放宽间隔降低 CPU 占用
     team_role: str = "单人"        # 单人 | 队长 | 队员
     invite_enabled: bool = False   # 队员备用兜底: 识别并点击接受邀请
     invite_img: str = ""

@@ -368,7 +368,7 @@ class AutomationController:
                 self._log(f"🛡 已根据排除标记跳过 {res.excluded_count} 个已失败目标")
             self._exclude_all_logged = False
             nxt = self.fsm.update(detected=True, has_result=False,
-                                   timed_out=False)
+                                  timed_out=False)
             if nxt != self.fsm.state:
                 self._click_target = m.center
                 self._goto(nxt)
@@ -847,7 +847,6 @@ class AutomationController:
         if self.profile and self.profile.error_action == "stop" \
                 and self._capture_fail_streak >= 12:
             self._error(exc)
-
 
 
 def _random_from_range(range_str: str, default: Optional[int] = None) -> Optional[int]:

@@ -143,7 +143,7 @@ class BotTab(ttk.Frame):
     @staticmethod
     def _fmt_num(v) -> str:
         """数值显示:整数值去掉 .0(3.0 -> '3'),其余原样。"""
-        if isinstance(v, (int, float)) and not isinstance(v, bool)                 and v == int(v):
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and v == int(v):
             return str(int(v))
         return str(v)
 
@@ -285,7 +285,6 @@ class BotTab(ttk.Frame):
         ttk.Button(trow, text="删除", command=self._delete_profile, width=6
                    ).pack(side=tk.LEFT)
 
-
         # ===== 运行模式 =====
         mf = ttk.LabelFrame(main, text="运行模式", padding="8")
         mf.pack(fill=tk.X, pady=(0, 8))
@@ -293,64 +292,69 @@ class BotTab(ttk.Frame):
         ttk.Label(mfc, text="模式:", font=("", 9)).pack(side=tk.LEFT)
         self.run_mode_combo = ttk.Combobox(
             mfc, textvariable=self._vars["run_mode"], width=6,
-            state="readonly", font=("", 9))
-        self.run_mode_combo["values"] = ["前台", "后台"]
+            state="readonly", values=["后台", "前台"])
         self.run_mode_combo.pack(side=tk.LEFT, padx=(4, 16))
-        ttk.Label(mfc, text="窗口标题关键词:", font=("", 9)).pack(side=tk.LEFT)
-        self.keyword_entry = ttk.Entry(
-            mfc, textvariable=self._vars["window_keyword"], width=10, font=("", 9))
-        self.keyword_entry.pack(side=tk.LEFT, padx=(4, 4))
-        ttk.Button(mfc, text="刷新窗口", command=self.refresh_windows, width=8
-                   ).pack(side=tk.LEFT, padx=(2, 8))
+        self.run_mode_combo.bind("<<ComboboxSelected>>", self._on_run_mode_changed)
+
+        # 窗口行
+        wrow = ttk.Frame(mfc)
+        wrow.pack(fill=tk.X)
+        ttk.Label(wrow, text="窗口:", font=("", 9)).pack(side=tk.LEFT)
         self.window_combo = ttk.Combobox(
-            mfc, textvariable=self._vars["window"], width=30,
-            state="readonly", font=("", 8))
-        self.window_combo.pack(side=tk.LEFT, padx=(0, 8))
-        self.window_combo.bind("<<ComboboxSelected>>", self._on_window_selected)
-        ttk.Label(mfc, text="备注:", font=("", 9)).pack(side=tk.LEFT)
-        remark_entry = ttk.Entry(mfc, textvariable=self._vars["window_remark"],
-                                 width=8, font=("", 9))
-        remark_entry.pack(side=tk.LEFT, padx=(4, 2))
-        remark_entry.bind("<Return>", lambda e: self.apply_remark())
-        ttk.Button(mfc, text="标记", command=self.apply_remark, width=5
-                   ).pack(side=tk.LEFT, padx=(2, 8))
-        ttk.Button(mfc, text="测试", command=self._test_backend, width=6
-                   ).pack(side=tk.LEFT)
-        ttk.Label(mfc, text="(测试=存截图到logs/并向窗口中心发一次后台点击)",
-                  foreground="gray", font=("", 8)).pack(side=tk.LEFT, padx=(6, 0))
+            wrow, textvariable=self._vars["window"], state="readonly", width=22)
+        self.window_combo.pack(side=tk.LEFT, padx=4)
+        self.window_combo.bind("<<ComboboxSelected>>",
+                               lambda e: self._on_window_selected())
+        ttk.Button(wrow, text="刷新窗口", command=self.refresh_windows, width=8
+                   ).pack(side=tk.LEFT, padx=2)
+        ttk.Button(wrow, text="测试", command=self._test_backend, width=5
+                   ).pack(side=tk.LEFT, padx=2)
+        self.btn_remark = ttk.Button(wrow, text="备注",
+                                     command=self._set_window_remark, width=5)
+        self.btn_remark.pack(side=tk.LEFT, padx=2)
 
-        # ===== 控制 =====
+        # ===== 战斗配置 (4大模块化折叠卡片) =====
+        cf = ttk.LabelFrame(main, text="战斗配置", padding="8")
+        cf.pack(fill=tk.X, pady=(0, 8))
 
-        # ===== 1.【基础】核心战斗目标 =====
-        basic_lf = ttk.LabelFrame(main, text="【基础】核心战斗目标", padding="8")
-        basic_lf.pack(fill=tk.X, pady=(0, 8))
-        basic_c = self._make_collapsible(basic_lf, default_open=True)
+        # 1.【核心战斗目标】
+        basic_box = ttk.LabelFrame(cf, text="【基础】核心战斗目标 (必配)", padding="6")
+        basic_box.pack(fill=tk.X, pady=(0, 6))
+        basic_c = self._make_collapsible(basic_box, default_open=True)
 
-        self._previews = {}
-        # 运行模式选择行
+        # 运行模式(单人/队长/队员)
         role_row = ttk.Frame(basic_c)
-        role_row.pack(fill=tk.X, pady=(0, 6))
-        ttk.Label(role_row, text="运行模式:", font=("", 9, "bold")).pack(side=tk.LEFT)
-        role_combo = ttk.Combobox(role_row, textvariable=self._vars["team_role"],
-                                  width=8, state="readonly", font=("", 9))
-        role_combo["values"] = ["单人", "队长", "队员"]
-        role_combo.pack(side=tk.LEFT, padx=(4, 12))
-        ttk.Label(role_row, text="💡 队员模式：被动等待发车，自动结算，免填开始图；队长/单人需配置开始图",
-                  foreground="#0066cc", font=("", 8)).pack(side=tk.LEFT)
+        role_row.pack(fill=tk.X, pady=(0, 4))
+        ttk.Label(role_row, text="组队协同角色:", font=("", 9, "bold")).pack(side=tk.LEFT)
+        team_role_combo = ttk.Combobox(
+            role_row, textvariable=self._vars["team_role"], width=8,
+            state="readonly", values=["单人", "队长", "队员"])
+        team_role_combo.pack(side=tk.LEFT, padx=(6, 8))
+        team_role_combo.bind("<<ComboboxSelected>>", self._on_team_role_changed)
+        self.role_tip_lbl = ttk.Label(role_row, text="", font=("", 8), foreground="gray")
+        self.role_tip_lbl.pack(side=tk.LEFT)
 
-        # 核心4图 (每行都是标准统一的图片控件行)
-        self._previews["battle"] = widgets.make_image_row(
-            basic_c, "战斗开始图:", self._vars["battle_img"], self._vars["battle_conf"],
-            lambda: self._crop_to("battle"))
-        self._previews["victory"] = widgets.make_image_row(
-            basic_c, "胜利结算图:", self._vars["victory_img"], self._vars["victory_conf"],
-            lambda: self._crop_to("victory"))
-        self._previews["defeat"] = widgets.make_image_row(
-            basic_c, "失败结算图:", self._vars["defeat_img"], self._vars["defeat_conf"],
-            lambda: self._crop_to("defeat"))
-        self._previews["confirm"] = widgets.make_image_row(
-            basic_c, "结算确认图(可选):", self._vars["confirm_img"],
-            self._vars["confirm_conf"], lambda: self._crop_to("confirm"))
+        # 核心4图 (单人/队长必须配开始图；队员可不配开始图)
+        pv_battle, brow = self._make_image_row(
+            basic_c, "战斗开始图:", self._vars["battle_img"],
+            self._vars["battle_conf"], "battle")
+        self._previews["battle"] = pv_battle
+        self._battle_img_label = brow.winfo_children()[0]
+
+        pv_vic, _ = self._make_image_row(
+            basic_c, "战斗胜利图:", self._vars["victory_img"],
+            self._vars["victory_conf"], "victory")
+        self._previews["victory"] = pv_vic
+
+        pv_def, _ = self._make_image_row(
+            basic_c, "战斗失败图:", self._vars["defeat_img"],
+            self._vars["defeat_conf"], "defeat")
+        self._previews["defeat"] = pv_def
+
+        pv_conf, _ = self._make_image_row(
+            basic_c, "结算确认图:", self._vars["confirm_img"],
+            self._vars["confirm_conf"], "confirm")
+        self._previews["confirm"] = pv_conf
 
         # 运行目标与匹配策略行
         brow = ttk.Frame(basic_c)
@@ -358,12 +362,12 @@ class BotTab(ttk.Frame):
         ttk.Label(brow, text="次数上限:", font=("", 9)).pack(side=tk.LEFT)
         ttk.Entry(brow, textvariable=self._vars["max_runs"], width=6,
                   font=("", 9)).pack(side=tk.LEFT, padx=(4, 6))
-        ttk.Label(brow, text="0=不限", foreground="gray", font=("", 8)).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Label(brow, text="0=不限", foreground="gray", font=("", 8)
+                  ).pack(side=tk.LEFT, padx=(0, 16))
 
         ttk.Label(brow, text="开始图点击次数:", font=("", 9)).pack(side=tk.LEFT)
         ttk.Entry(brow, textvariable=self._vars["battle_clicks"], width=3,
                   font=("", 9)).pack(side=tk.LEFT, padx=(4, 16))
-
         ttk.Label(brow, text="同图多个时点:", font=("", 9)).pack(side=tk.LEFT)
         strat = ttk.Combobox(brow, textvariable=self._vars["match_strategy"],
                              width=8, state="readonly", font=("", 9))
@@ -444,7 +448,8 @@ class BotTab(ttk.Frame):
         ttk.Label(trow, text="战斗超时(秒):", font=("", 9)).pack(side=tk.LEFT)
         ttk.Entry(trow, textvariable=self._vars["battle_timeout"], width=5,
                   font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
-        ttk.Label(trow, text="0=不限", foreground="gray", font=("", 8)).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Label(trow, text="0=不限", foreground="gray", font=("", 8)
+                  ).pack(side=tk.LEFT, padx=(0, 16))
         ttk.Label(trow, text="超时脱离点击坐标:", font=("", 9)).pack(side=tk.LEFT)
         ttk.Entry(trow, textvariable=self._vars["timeout_x"], width=5,
                   font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
@@ -460,7 +465,8 @@ class BotTab(ttk.Frame):
         ttk.Label(frow, text="找图超时(秒):", font=("", 9)).pack(side=tk.LEFT)
         ttk.Entry(frow, textvariable=self._vars["find_timeout"], width=5,
                   font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
-        ttk.Label(frow, text="0=关", foreground="gray", font=("", 8)).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Label(frow, text="0=关", foreground="gray", font=("", 8)
+                  ).pack(side=tk.LEFT, padx=(0, 16))
         ttk.Label(frow, text="激活点击坐标:", font=("", 9)).pack(side=tk.LEFT)
         ttk.Entry(frow, textvariable=self._vars["find_x"], width=5,
                   font=("", 9)).pack(side=tk.LEFT, padx=(4, 2))
@@ -1229,4 +1235,3 @@ class BotTab(ttk.Frame):
                 f.write(line + "\n")
         except Exception:
             pass
-
