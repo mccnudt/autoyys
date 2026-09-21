@@ -894,4 +894,53 @@ class TestTeamMemberFlow:
         assert c.fsm.state == GameState.STOPPED
         assert any("检测到异常弹窗" in m for m in msgs(events))
 
+    def test_boss_priority_clicks_alt_battle(self, profile):
+        """当同屏出现普通小怪与首领Boss时，开启boss_priority优先选择首领。"""
+        profile.alt_enabled = True
+        profile.alt_battle_img = "boss.png"
+        profile.boss_priority = True
+
+        # 同时包含普通小怪 challenge 和首领 challenge_alt
+        script = [["challenge", "challenge_alt"]]
+        c, events = make_controller(profile, FakeDetector(script))
+        c.run_once()
+        # 应该进入 CLICK_CHALLENGE 且目标已被锁定
+        assert c.fsm.state == GameState.CLICK_CHALLENGE
+        assert c._click_target == (400, 300)
+
+    def test_greedy_chest_looting_before_exit(self, profile):
+        """困28打完Boss后，先贪婪拾取画面中出现的1-3只小纸人，小纸人被拾取完后才点击退出副本。"""
+        profile.end_enabled = True
+        profile.end_img = "exit.png"
+        profile.chest_enabled = True
+        profile.chest_img = "chest.png"
+        profile.chest_max_clicks = 3
+
+        # 模拟场景：画面中持续存在退出图 end
+        script = [["end"]]
+        fake_detector = FakeDetector(script)
+        # 地上存在 2 只小纸人 (100, 200) 和 (300, 200)
+        fake_detector.matcher.chests = [(100, 200), (300, 200)]
+
+        fake_input = FakeInput()
+        c, events = make_controller(profile, fake_detector, input_=fake_input)
+
+        # 拍1: 发现小纸人1并拾取，不点击退出
+        c.run_once()
+        assert any("拾取通关小纸人/宝箱 (100, 200)" in m for m in msgs(events))
+        assert c.fsm.state == GameState.FIND_CHALLENGE  # 依然留在场内继续找下一只
+
+        # 拍2: 小纸人1消失，拾取小纸人2
+        fake_detector.matcher.chests = [(300, 200)]
+        c.run_once()
+        assert any("拾取通关小纸人/宝箱 (300, 200)" in m for m in msgs(events))
+        assert c.fsm.state == GameState.FIND_CHALLENGE
+
+        # 拍3: 地上无小纸人了，检测到退出按钮 end，点击退出副本！
+        fake_detector.matcher.chests = []
+        c.run_once()
+        assert c.fsm.state == GameState.CLICK_END
+        assert c._click_target == (400, 300)
+
+
 

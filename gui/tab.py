@@ -138,11 +138,18 @@ class BotTab(ttk.Frame):
         ("ready_img", "ready_img", "img"),
         ("ready_threshold", "ready_conf", "float"),
         ("team_timeout", "team_timeout", "float"),
+        ("boss_priority", "boss_priority", "bool"),
+        ("chest_enabled", "chest_enabled", "bool"),
+        ("chest_img", "chest_img", "img"),
+        ("chest_threshold", "chest_conf", "float"),
+        ("chest_max_clicks", "chest_max_clicks", "int"),
     ]
     # var 默认值覆盖:profile 默认 None/空时,UI 仍给合理初始值
     _VAR_DEFAULT_OVERRIDES = {
         "window_keyword": "阳师",
         "team_role": "单人",
+        "boss_priority": True,
+        "chest_max_clicks": 3,
         "timeout": (800, 450),  # 超时点击坐标的 UI 默认
     }
 
@@ -403,9 +410,11 @@ class BotTab(ttk.Frame):
         ttk.Entry(excrow, textvariable=self._vars["exclude_dist"], width=5,
                   font=("", 9)).pack(side=tk.LEFT)
 
-        self._previews["alt_battle"], _ = self._checkbox_image_row(
+        self._previews["alt_battle"], alt_row = self._checkbox_image_row(
             adv_c, "备选开始图(任一命中即点):", self._vars["alt_enabled"],
             self._vars["alt_battle_img"], self._vars["alt_battle_conf"], "alt_battle")
+        ttk.Checkbutton(alt_row, text="首领优先",
+                        variable=self._vars["boss_priority"]).pack(side=tk.LEFT, padx=(6, 0))
 
         self._previews["second"], s2row = self._checkbox_image_row(
             adv_c, "第二段图(如进攻):", self._vars["second_enabled"],
@@ -579,6 +588,16 @@ class BotTab(ttk.Frame):
             dfc, "副本结束图(识别到则点击并重新进入):", self._vars["end_enabled"],
             self._vars["end_img"], self._vars["end_conf"], "end")
         self._previews["end"] = pv
+
+        pv, chest_row = self._checkbox_image_row(
+            dfc, "拾取通关小纸人/宝箱:", self._vars["chest_enabled"],
+            self._vars["chest_img"], self._vars["chest_conf"], "chest")
+        self._previews["chest"] = pv
+        ttk.Label(chest_row, text="拾取上限:", font=("", 8)).pack(side=tk.LEFT, padx=(8, 2))
+        ttk.Entry(chest_row, textvariable=self._vars["chest_max_clicks"], width=3,
+                  font=("", 9)).pack(side=tk.LEFT)
+        ttk.Label(chest_row, text="只/轮", foreground="gray", font=("", 8)
+                  ).pack(side=tk.LEFT, padx=(2, 0))
 
         # ===== 控制按钮(固定区,不随设置区滚动) =====
         bf = ttk.Frame(fixed)

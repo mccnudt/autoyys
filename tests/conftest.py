@@ -90,13 +90,14 @@ class FakeDetector:
              "shikigami": "shikigami", "challenge_alt": "challenge_alt",
              "second": "second", "entry": "entry", "entry2": "entry2",
              "end": "end", "alert": "alert", "exclude": "exclude",
-             "invite": "invite", "ready": "ready"}
+             "invite": "invite", "ready": "ready", "chest": "chest"}
 
     def __init__(self, script):
         self.script = list(script) or [[]]
         self.i = 0
         self.requested = []
         self.strategies = []  # 每拍的多目标策略
+        self.matcher = _FakeMatcher()
 
     def detect(self, image, profile, types, strategy="best"):
         self.requested.append([t.value for t in types])
@@ -111,6 +112,18 @@ class FakeDetector:
                 continue
             m = MatchResult(ScreenType_of(t), (400, 300), 0.95)
             setattr(res, self.FIELD[t], m)
+        return res
+
+
+class _FakeMatcher:
+    def __init__(self):
+        self.chests = []
+
+    def find_all(self, image, template_name, threshold=0.8):
+        from core.models import MatchResult, ScreenType
+        res = []
+        for pt in self.chests:
+            res.append(MatchResult(ScreenType.CHEST, pt, 0.9))
         return res
 
 
@@ -129,7 +142,8 @@ def ScreenType_of(t):
             "alert": ScreenType.ALERT,
             "exclude": ScreenType.EXCLUDE,
             "invite": ScreenType.INVITE,
-            "ready": ScreenType.READY}[t]
+            "ready": ScreenType.READY,
+            "chest": ScreenType.CHEST}[t]
 
 
 class FakeInput:

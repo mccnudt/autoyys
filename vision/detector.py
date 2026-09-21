@@ -22,6 +22,7 @@ DEFAULT_ROIS = {
     ScreenType.FAILURE: (0.20, 0.05, 0.80, 0.60),      # 失败标题居中偏上
     ScreenType.SETTLEMENT: (0.10, 0.35, 0.90, 1.0),    # 结算与达摩通常在下半区
     ScreenType.READY: (0.65, 0.65, 1.0, 1.0),          # 准备按钮通常在右下角
+    ScreenType.CHEST: (0.10, 0.20, 0.90, 0.85),        # 通关小纸人/宝箱通常在道路中部区域
 }
 
 
@@ -66,6 +67,8 @@ class ScreenDetector:
                 profile.invite_img, profile.invite_threshold, "invite"),
             ScreenType.READY: (
                 profile.ready_img, profile.ready_threshold, "ready"),
+            ScreenType.CHEST: (
+                profile.chest_img, profile.chest_threshold, "chest"),
         }
 
         # 若开启排除图过滤且当前关注开始图，预先检索所有排除标记中心点

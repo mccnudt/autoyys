@@ -123,6 +123,7 @@ class AutomationController:
         self._reentered_count = 0
         self._minimized_logged = False
         self._exclude_all_logged = False
+        self._chest_clicked_count = 0
 
     @property
     def finished(self) -> bool:
@@ -305,9 +306,11 @@ class AutomationController:
             if self.profile.entry2_enabled and self.profile.entry2_img:
                 self._goto(GameState.FIND_ENTRY2)
             else:
+                self._chest_clicked_count = 0
                 self._goto(GameState.FIND_CHALLENGE)
         else:
             self._log("已点击入口图2，进入副本，等待界面载入...")
+            self._chest_clicked_count = 0
             self._goto(GameState.FIND_CHALLENGE)
 
     def _tick_click_end(self) -> None:
@@ -362,7 +365,11 @@ class AutomationController:
                                    strategy=self.profile.match_strategy)
         if self._handle_alert_if_present(img, res):
             return
-        m = res.first(ScreenType.CHALLENGE, ScreenType.CHALLENGE_ALT)
+        # 挑战目标优先级：若开启备选图且开启 Boss 优先，先看 CHALLENGE_ALT (首领 Boss)
+        if self.profile.boss_priority and self.profile.alt_enabled and self.profile.alt_battle_img:
+            m = res.first(ScreenType.CHALLENGE_ALT, ScreenType.CHALLENGE)
+        else:
+            m = res.first(ScreenType.CHALLENGE, ScreenType.CHALLENGE_ALT)
         if m is not None:
             if getattr(res, "excluded_count", 0) > 0:
                 self._log(f"🛡 已根据排除标记跳过 {res.excluded_count} 个已失败目标")
@@ -377,6 +384,24 @@ class AutomationController:
             if not getattr(self, "_exclude_all_logged", False):
                 self._log(f"🛡 当前可见的 {res.excluded_count} 个候选目标均包含排除标记，已全部跳过")
                 self._exclude_all_logged = True
+
+        # 通关小纸人/宝箱贪婪拾取拦截器:
+        # 当场景中没有小怪可打了(击杀 Boss 结算后)，且开启了小纸人拾取且未达当轮上限
+        if (self.profile.chest_enabled and self.profile.chest_img
+                and self._chest_clicked_count < self.profile.chest_max_clicks):
+            chests = self.detector.matcher.find_all(
+                img, self.profile.chest_img, self.profile.chest_threshold)
+            valid_chests = [c for c in chests if c.matched and c.center]
+            if valid_chests:
+                target = valid_chests[0]
+                self.input.click(target.center[0], target.center[1], clicks=1)
+                self._chest_clicked_count += 1
+                self._log(f"🎁 拾取通关小纸人/宝箱 ({target.center[0]}, {target.center[1]}) "
+                          f"[第 {self._chest_clicked_count}/{self.profile.chest_max_clicks} 只]")
+                self._state_entered_at = now
+                return
+
+        # 只有在小纸人全部拾取完毕或未配置时，才允许响应结束图退出副本
         if res.end is not None and res.end.matched:
             self._click_target = res.end.center
             self._goto(GameState.CLICK_END)

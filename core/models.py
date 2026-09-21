@@ -47,6 +47,7 @@ class ScreenType(Enum):
     EXCLUDE = "exclude"            # 排除图片(如结界失败标记)
     INVITE = "invite"              # 接受组队邀请
     READY = "ready"                # 组队准备按钮
+    CHEST = "chest"                # 通关小纸人/宝箱
     NONE = "none"
 
 
@@ -70,6 +71,7 @@ class ScreenResult:
     exclude: Optional[MatchResult] = None
     invite: Optional[MatchResult] = None
     ready: Optional[MatchResult] = None
+    chest: Optional[MatchResult] = None
     excluded_count: int = 0
 
     def first(self, *types: ScreenType) -> Optional[MatchResult]:
@@ -98,9 +100,10 @@ class BattleProfile:
     shikigami_enabled: bool = False  # 进入战斗后自动点击式神
     shikigami_img: str = ""
     shikigami_threshold: float = 0.8
-    alt_enabled: bool = False      # 备选开始图:与主开始图任一命中即点
+    alt_enabled: bool = False      # 备选开始图:与主开始图任一命中即点(可用于首领Boss)
     alt_battle_img: str = ""
     alt_battle_threshold: float = 0.8
+    boss_priority: bool = True     # 优先挑战首领Boss(若配置了备选图且同屏出现)
     second_enabled: bool = False   # 第二段图:点完开始图后再找它点击(如"进攻")
     second_img: str = ""
     second_threshold: float = 0.8
@@ -123,6 +126,10 @@ class BattleProfile:
     end_img: str = ""
     end_threshold: float = 0.7
     end_delay: float = 2.0         # 点完结束图后的小缓冲(回到找入口)
+    chest_enabled: bool = False    # 拾取通关小纸人/宝箱(如困28击败首领后随机出现的1-3只小纸人)
+    chest_img: str = ""            # 小纸人/宝箱图片路径
+    chest_threshold: float = 0.7   # 小纸人匹配阈值
+    chest_max_clicks: int = 3      # 单轮最多拾取小纸人数量(通常为1-3只)
     alert_enabled: bool = False    # 通用异常弹窗拦截(体力不足/断线/邀请)
     alert_img: str = ""            # 弹窗按钮图片(如确定/取消/X)
     alert_threshold: float = 0.8
@@ -199,7 +206,8 @@ class BattleProfile:
                 ("异常弹窗处理", "alert_enabled", "alert_img"),
                 ("排除图片过滤", "exclude_enabled", "exclude_img"),
                 ("接受组队邀请", "invite_enabled", "invite_img"),
-                ("组队准备按钮", "ready_enabled", "ready_img")):
+                ("组队准备按钮", "ready_enabled", "ready_img"),
+                ("拾取通关小纸人/宝箱", "chest_enabled", "chest_img")):
             if getattr(self, en):
                 img_path = getattr(self, img)
                 if not img_path:
