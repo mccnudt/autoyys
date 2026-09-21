@@ -25,10 +25,23 @@ def resolve_image(name: str) -> str:
         return ""
     if os.path.isabs(name) and os.path.exists(name):
         return name
+    # 对于相对名（或存在的绝对路径已在上面返回），尝试各基目录
+    search_name = name
     for base in (RESOURCE_ROOT, APP_ROOT, os.curdir):
-        cand = os.path.join(base, name)
+        cand = os.path.join(base, search_name)
         if os.path.exists(cand):
             return os.path.abspath(cand)
+    # 绝对路径不存在时（如从其他电脑迁移的配置），提取文件名重新查找
+    if os.path.isabs(name):
+        basename = os.path.basename(name)
+        for base in (RESOURCE_ROOT, APP_ROOT, os.curdir):
+            cand = os.path.join(base, basename)
+            if os.path.exists(cand):
+                return os.path.abspath(cand)
+            # 也尝试 templates 子目录
+            cand_t = os.path.join(base, "templates", basename)
+            if os.path.exists(cand_t):
+                return os.path.abspath(cand_t)
     return name
 
 

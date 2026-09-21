@@ -131,8 +131,10 @@ class AutomationController:
 
     def suggested_interval(self) -> float:
         """根据当前状态与运行阶段提供自适应检测心跳(节约多开 CPU/GPU 占用)。"""
-        base = self.profile.detect_interval if self.profile else 0.5
         if not self.profile:
+            return 0.5
+        base = self.profile.detect_interval
+        if not getattr(self.profile, "adaptive_interval", True) or base < 0.2:
             return base
         st = self.fsm.state
         now = self._clock()
@@ -143,9 +145,10 @@ class AutomationController:
         if st == GameState.WAIT_BATTLE:
             elapsed = now - self._battle_started_at
             if elapsed < self.profile.pre_battle_delay:
-                return max(base, 1.2)
+                return max(base * 2.5, 1.2)
             elif elapsed < 10.0 and self.profile.battle_timeout > 15.0:
-                return max(base, 1.0)
+                return max(base * 2.0, 1.0)
+            return max(base * 2.0, 1.0)
         # 3. 找入口/找二段界面展开等待期: 适度降频
         elif st in (GameState.FIND_ENTRY, GameState.FIND_ENTRY2):
             delay = (self.profile.entry_delay if st == GameState.FIND_ENTRY
@@ -155,6 +158,11 @@ class AutomationController:
         elif st == GameState.FIND_SECOND:
             if now - self._state_entered_at < self.profile.second_delay:
                 return max(base, 0.8)
+        # 4. 点击后小缓冲期: 等待画面切换，不必高频轮询
+        elif st in (GameState.CLICK_CHALLENGE, GameState.CLICK_SECOND,
+                    GameState.CLICK_ENTRY, GameState.CLICK_ENTRY2,
+                    GameState.CLICK_END):
+            return max(base, 0.5)
         return base
 
     # ---- 事件 ----
@@ -499,8 +507,13 @@ class AutomationController:
             return False
         pos = res.alert.center
         if self.profile.alert_action == "stop":
-            self._log("🛑 检测到异常弹窗（如体力耗尽），按配置自动停止挂机")
+            self._log("🛑 检测到异常弹窗（如体力耗尽/验证码），按配置自动停止挂机并触发警报")
             self.debug.save_error(img, AutoBotError("检测到异常弹窗，按配置停止"))
+            try:
+                import winsound
+                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+            except Exception:
+                pass
             self._goto(GameState.STOPPED)
             self._finished = True
             return True
@@ -835,31 +848,6 @@ class AutomationController:
                 and self._capture_fail_streak >= 12:
             self._error(exc)
 
-    def get_adaptive_interval(self) -> float:
-        """自适应心跳：根据当前状态与运行阶段动态调节轮询间隔，降低 CPU 消耗。"""
-        if not self.profile:
-            return 0.5
-        base = self.profile.detect_interval
-        if not getattr(self.profile, "adaptive_interval", True) or base < 0.2:
-            return base
-
-        state = self.fsm.state
-        # 战斗期间放宽检测间隔
-        if state == GameState.WAIT_BATTLE:
-            now = self._clock()
-            # 战斗前置动画等待期内
-            if now - self._battle_started_at < self.profile.pre_battle_delay:
-                return max(base * 2.5, 1.2)
-            # 正常战斗进行期
-            return max(base * 2.0, 1.0)
-        # 点击后的小缓冲期
-        if state in (GameState.CLICK_CHALLENGE, GameState.CLICK_SECOND,
-                     GameState.CLICK_ENTRY, GameState.CLICK_ENTRY2,
-                     GameState.CLICK_END):
-            return max(base, 0.5)
-        return base
-
-    suggested_interval = get_adaptive_interval
 
 
 def _random_from_range(range_str: str, default: Optional[int] = None) -> Optional[int]:

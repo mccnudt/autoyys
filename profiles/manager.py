@@ -88,13 +88,12 @@ class ProfileManager:
 
     # ---- 预置 ----
 
-    def _init_presets(self) -> None:
-        """预置模板跟随程序版本刷新(官方推荐值),用户的自定义模板不受影响。
-
-        要修改预置参数请"另存为"自己的模板名,预置每次启动会重置为代码默认。
-        """
+    def _init_presets(self, overwrite: bool = False) -> None:
+        """首次运行初始化预置模板；若文件已存在则不强制覆盖，保护用户的微调配置。"""
         for name, d in PRESET_PROFILES.items():
-            self.save(BattleProfile.from_dict({**d, "name": name}))
+            path = self.path_of(name)
+            if overwrite or not os.path.exists(path):
+                self.save(BattleProfile.from_dict({**d, "name": name}))
 
     # ---- CRUD ----
 

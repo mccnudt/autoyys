@@ -1,4 +1,4 @@
-# Onmyoji AutoBot (AutoYYS) V1.1.2
+# Onmyoji AutoBot (AutoYYS) V1.2
 
 阴阳师「通用战斗模板」挂机工具。按 `docs/` 中的 PRD/TDD 分层架构实现。
 

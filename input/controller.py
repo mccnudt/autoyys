@@ -49,9 +49,9 @@ class InputController:
     def click(self, x: int, y: int, clicks: int = 1) -> None:
         """点击。后台模式传客户区坐标，前台模式传屏幕坐标。"""
         if self.backend is not None:
-            self.backend.click(x, y, clicks=clicks, jitter=30)
+            self.backend.click(x, y, clicks=clicks, jitter=8)
         else:
-            self.foreground.click(x, y, clicks=clicks, jitter=30)
+            self.foreground.click(x, y, clicks=clicks, jitter=8)
 
     def scroll(self, x: Optional[int], y: Optional[int], ticks: int) -> None:
         """滚轮。后台模式 x,y 为检测坐标系(自动转逻辑客户区再转屏幕 lParam)。"""

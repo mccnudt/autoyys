@@ -31,6 +31,9 @@ STATE_TEXT = {
     "wait_team": "等待发车",
 }
 
+LOG_MAX_LINES = 1000        # UI 文本框最大行数
+LOG_TRUNCATE_LINES = 200    # 超过上限时单次裁剪行数
+
 
 class BotTab(ttk.Frame):
     """一个标签页承载一次完整挂机会话。tab_id 从 1 开始。"""
@@ -917,6 +920,7 @@ class BotTab(ttk.Frame):
         except Exception as e:
             self.log(f"截图失败: {e}（窗口最小化？）")
             return
+        prof = self._to_profile()
         path = os.path.join(APP_ROOT, "logs", f"test_backend{self._ftag}.png")
         import cv2
         cv2.imwrite(path, img)
@@ -1204,13 +1208,25 @@ class BotTab(ttk.Frame):
 
     def log(self, message: str) -> None:
         ts = time.strftime("%H:%M:%S")
+        line = f"[{ts}] {message}"
 
         def _append():
             try:
-                self.log_text.insert(tk.END, f"[{ts}] {message}\n")
-                if int(self.log_text.index("end-1c").split(".")[0]) > 1000:
-                    self.log_text.delete("1.0", "200.0")
+                self.log_text.insert(tk.END, line + "\n")
+                if int(self.log_text.index("end-1c").split(".")[0]) > LOG_MAX_LINES:
+                    self.log_text.delete("1.0", f"{LOG_TRUNCATE_LINES}.0")
                 self.log_text.see(tk.END)
             except Exception:
                 pass
         self._after(_append)
+
+        # 异步追加写入本地持久化日志，关闭界面后依然可追溯
+        try:
+            log_dir = os.path.join(APP_ROOT, "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            log_file = os.path.join(log_dir, f"tab{self.tab_id}_{time.strftime('%Y%m%d')}.log")
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except Exception:
+            pass
+

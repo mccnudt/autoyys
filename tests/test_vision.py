@@ -232,6 +232,7 @@ class TestScreenDetector:
 class TestUnicodePath:
     """中文文件名模板可读取(语义化命名后模板图名含中文,cv2.imread 不支持)。"""
 
+
     def test_chinese_path_load_and_match(self, tmp_path):
         import numpy as np
         import cv2
@@ -255,3 +256,41 @@ class TestUnicodePath:
     def test_missing_path_safe(self):
         from vision.matcher import TemplateRegistry
         assert TemplateRegistry().load("不存在.png") is None
+
+
+class TestRoiMatching:
+    """两阶段 ROI 匹配测试：ROI 内加速命中 + ROI 外安全全图兜底回退。"""
+
+    def test_roi_hit_inside(self, tmp_path):
+        """目标在 ROI 区域内：成功命中且中心坐标折算正确。"""
+        tpl = np.full((20, 20, 3), 128, np.uint8)
+        cv2.rectangle(tpl, (2, 2), (17, 17), (0, 255, 0), -1)
+        tpl_path = str(tmp_path / "btn.png")
+        cv2.imwrite(tpl_path, tpl)
+
+        # 构造 200x200 大图，目标放在右下角 (150, 150) 到 (170, 170)
+        screen = np.full((200, 200, 3), 50, np.uint8)
+        screen[150:170, 150:170] = tpl
+
+        matcher = TemplateMatcher()
+        # ROI 指定右下角 (0.5, 0.5, 1.0, 1.0)
+        res = matcher.find(screen, tpl_path, threshold=0.8, roi=(0.5, 0.5, 1.0, 1.0))
+        assert res.matched
+        assert res.center == (160, 160)
+
+    def test_roi_fallback_to_fullscreen_when_outside(self, tmp_path):
+        """目标在 ROI 区域外：第一阶段 ROI 匹配未命中后，自动降级回退到全图扫描，依然准确命中！"""
+        tpl = np.full((20, 20, 3), 128, np.uint8)
+        cv2.rectangle(tpl, (2, 2), (17, 17), (0, 0, 255), -1)
+        tpl_path = str(tmp_path / "out_btn.png")
+        cv2.imwrite(tpl_path, tpl)
+
+        # 构造 200x200 大图，目标故意放在左上角 (20, 20) 到 (40, 40)
+        screen = np.full((200, 200, 3), 50, np.uint8)
+        screen[20:40, 20:40] = tpl
+
+        matcher = TemplateMatcher()
+        # 即使传了右下角 ROI，也能无缝降级回退到全图找到左上角目标！
+        res = matcher.find(screen, tpl_path, threshold=0.8, roi=(0.6, 0.6, 1.0, 1.0))
+        assert res.matched
+        assert res.center == (30, 30)

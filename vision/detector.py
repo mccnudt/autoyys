@@ -13,6 +13,17 @@ import numpy as np
 from core.models import BattleProfile, MatchResult, ScreenResult, ScreenType
 from vision.matcher import TemplateMatcher
 
+# 常见游戏元素推荐 ROI 区域 (x1_ratio, y1_ratio, x2_ratio, y2_ratio)
+# 两阶段机制：先在推荐区域内极速匹配(~1-2ms)，未命中自动无感回退全图完整扫描(100%兜底)
+DEFAULT_ROIS = {
+    ScreenType.CHALLENGE: (0.55, 0.55, 1.0, 1.0),      # 挑战按钮通常在右下角
+    ScreenType.CHALLENGE_ALT: (0.55, 0.55, 1.0, 1.0),  # 备选挑战按钮
+    ScreenType.VICTORY: (0.20, 0.05, 0.80, 0.60),      # 胜利标题居中偏上
+    ScreenType.FAILURE: (0.20, 0.05, 0.80, 0.60),      # 失败标题居中偏上
+    ScreenType.SETTLEMENT: (0.10, 0.35, 0.90, 1.0),    # 结算与达摩通常在下半区
+    ScreenType.READY: (0.65, 0.65, 1.0, 1.0),          # 准备按钮通常在右下角
+}
+
 
 class ScreenDetector:
 
@@ -91,7 +102,8 @@ class ScreenDetector:
                 else:
                     m = MatchResult(t, None, 0.0)
             else:
-                m = self.matcher.find(image, img_path, threshold, strategy)
+                roi = DEFAULT_ROIS.get(t)
+                m = self.matcher.find(image, img_path, threshold, strategy, roi=roi)
 
             m.screen_type = t
             if m.matched:

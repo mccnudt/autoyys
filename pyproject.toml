@@ -1,6 +1,6 @@
 [project]
 name = "onmyoji-autobot"
-version = "1.1.2"
+version = "1.2.0"
 description = "阴阳师通用战斗模板挂机（窗口识别 + FSM + 前台/后台输入）"
 requires-python = ">=3.9"
 

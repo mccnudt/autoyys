@@ -75,12 +75,16 @@ class TemplateMatcher:
 
     def find(self, image: np.ndarray, template_name: str,
              threshold: float, strategy: str = "best",
-             scales: Optional[Sequence[float]] = None) -> MatchResult:
+             scales: Optional[Sequence[float]] = None,
+             roi: Optional[Tuple[float, float, float, float]] = None) -> MatchResult:
         """在 image（BGR）中找 template_name（路径），返回 MatchResult。
 
         strategy: "best"=全局最高分(默认); "最上面"=命中里 y 最小;
                   "最左边"=命中里 x 最小(多目标用 NMS 去重)。
         scales: 尺度列表，如 (1.0, 0.9, 1.1, 0.8, 1.25)，支持跨分辨率等比自适应。
+        roi: (x1_ratio, y1_ratio, x2_ratio, y2_ratio)，如 (0.6, 0.6, 1.0, 1.0)。
+             第一阶段先在 ROI 子区域高速检索（~1-2ms）；若未达到阈值，自动安全降级回退到
+             第二阶段全图扫描，确保 100% 不漏检任何异常位置的目标。
         未找到时 center=None、score=最高分。
         """
         st = ScreenType.NONE
@@ -88,10 +92,29 @@ class TemplateMatcher:
         if image is None or image.size == 0 or tpl is None:
             return MatchResult(st, None, 0.0)
 
+        ih, iw = image.shape[:2]
+
+        # 第一阶段：ROI 子区域优先匹配（若指定了 roi）
+        if roi is not None:
+            rx1 = max(0, int(iw * roi[0]))
+            ry1 = max(0, int(ih * roi[1]))
+            rx2 = min(iw, int(iw * roi[2]))
+            ry2 = min(ih, int(ih * roi[3]))
+            orig_th, orig_tw = tpl.shape[:2]
+            if (rx2 - rx1) >= orig_tw and (ry2 - ry1) >= orig_th:
+                sub_img = image[ry1:ry2, rx1:rx2]
+                sub_res = self.find(sub_img, template_name, threshold, strategy, scales, roi=None)
+                if sub_res.matched and sub_res.center:
+                    return MatchResult(
+                        st,
+                        (sub_res.center[0] + rx1, sub_res.center[1] + ry1),
+                        sub_res.score
+                    )
+            # 若 ROI 内未匹配到或子图过小，自动无缝降级到接下来的全图完整扫描
+
         search_scales = [1.0] if not scales else ([1.0] + [s for s in scales if s != 1.0])
         best_match = MatchResult(st, None, 0.0)
 
-        ih, iw = image.shape[:2]
         orig_th, orig_tw = tpl.shape[:2]
 
         for s in search_scales:
